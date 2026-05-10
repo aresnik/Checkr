@@ -9,6 +9,7 @@
 #include <iostream>
 #include <thread>
 
+// Constructor initializes AI state flags and invalid default AI move positions.
 GameController::GameController()
     : aiThinking(false), aiMoveReady(false)
 {
@@ -16,6 +17,7 @@ GameController::GameController()
     aiTo = {-1, -1};
 }
 
+// Starts a visual animation for one piece moving from one square to another.
 void GameController::startMoveAnimation(char piece, int fromRow, int fromCol, int toRow, int toCol)
 {
     animation.active = true;
@@ -28,12 +30,16 @@ void GameController::startMoveAnimation(char piece, int fromRow, int fromCol, in
     animation.durationMs = 300;
 }
 
+// Converts the board's legal destination list into Square objects for the UI.
 std::vector<Square> GameController::getLegalMovesForSelection(board &b, int row, int col)
 {
     std::vector<Square> legalMoves;
+
+    // Ask the board engine for all legal destination squares for this selected piece.
     std::vector<std::pair<int, int>> destinations =
         b.getLegalDestinationsForSquare(row, col);
 
+    // Convert each pair into a Square struct used by the controller/UI.
     for (size_t i = 0; i < destinations.size(); ++i)
     {
         Square sq;
@@ -45,23 +51,32 @@ std::vector<Square> GameController::getLegalMovesForSelection(board &b, int row,
     return legalMoves;
 }
 
+// Handles a mouse click on the board.
 void GameController::handleClick(board &b, int row, int col)
 {
+    // Ignore input while an animation is running, while AI is thinking,
+    // or when it is the black AI player's turn.
     if (animation.active || aiThinking || b.getTurnPublic() == 'b')
         return;
 
+    // Ignore clicks outside the board.
     if (row < 0 || row >= 8 || col < 0 || col >= 8)
         return;
 
+    // Ignore light squares because checkers pieces only move on dark squares.
     if ((row + col) % 2 == 0)
         return;
 
+    // No piece is currently selected.
     if (selectedRow == -1 && selectedCol == -1)
     {
+        // If the clicked square contains the current player's piece, select it.
         if (isCurrentPlayersPiece(b, row, col))
         {
             selectedRow = row;
             selectedCol = col;
+
+            // Store legal moves so the UI can highlight possible destinations.
             legalMoves = getLegalMovesForSelection(b, row, col);
 
             std::cout << "Selected piece: (" << row << ", " << col << ")\n";
@@ -69,6 +84,7 @@ void GameController::handleClick(board &b, int row, int col)
     }
     else
     {
+        // If another current-player piece is clicked, switch selection to it.
         if (isCurrentPlayersPiece(b, row, col))
         {
             selectedRow = row;
@@ -79,12 +95,15 @@ void GameController::handleClick(board &b, int row, int col)
         }
         else
         {
+            // Store the piece before moving so the animation still knows what to draw.
             char movingPiece = b.getPieceAt8x8(selectedRow, selectedCol);
 
-            // NEW: fetch full move path before applying the move
+            // Get the full move path before applying the move.
+            // This is important for jump chains, where the move may include multiple segments.
             std::vector<std::pair<int, int>> pathPairs =
                 b.getMovePath8x8(selectedRow, selectedCol, row, col);
 
+            // Ask the board engine to apply the move.
             bool moved = b.tryMove8x8(selectedRow, selectedCol, row, col);
 
             if (moved)
@@ -92,7 +111,7 @@ void GameController::handleClick(board &b, int row, int col)
                 std::cout << "Moved from (" << selectedRow << ", " << selectedCol
                           << ") to (" << row << ", " << col << ")\n";
 
-                // NEW: store path in controller
+                // Convert and store the animation path in the controller.
                 animationPath.clear();
                 animationPathIndex = 1;
 
@@ -104,7 +123,7 @@ void GameController::handleClick(board &b, int row, int col)
                     animationPath.push_back(sq);
                 }
 
-                // For now, animate only the first segment if available.
+                // Start animating the first segment of the path.
                 if (animationPath.size() >= 2)
                 {
                     startMoveAnimation(movingPiece,
@@ -113,7 +132,7 @@ void GameController::handleClick(board &b, int row, int col)
                 }
                 else
                 {
-                    // Fallback
+                    // Fallback for simple moves or missing path data.
                     startMoveAnimation(movingPiece,
                                        selectedRow, selectedCol,
                                        row, col);
@@ -125,29 +144,37 @@ void GameController::handleClick(board &b, int row, int col)
                           << selectedCol << ") to (" << row << ", " << col << ")\n";
             }
 
+            // Clear human selection state after attempting a move.
             selectedRow = -1;
             selectedCol = -1;
             legalMoves.clear();
 
+            // If the human move succeeded and it is now the AI's turn,
+            // start AI move search on a detached background thread.
             if (moved && b.getTurnPublic() == 'b' && !aiThinking)
             {
                 aiThinking = true;
 
+                // Copy the board so the AI thread does not directly mutate the live board.
                 board boardCopy = b;
 
                 std::thread([boardCopy, this]() mutable
                             {
                     int fr, fc, tr, tc;
+
+                    // Search for the AI's best move at specified depth
                     bool found = boardCopy.findBestMove8x8(3, fr, fc, tr, tc);
 
                     if (found)
                     {
+                        // Store the chosen AI move safely because this runs on another thread.
                         std::lock_guard<std::mutex> lock(aiMutex);
                         aiFrom = {fr, fc};
                         aiTo = {tr, tc};
                         aiMoveReady = true;
                     }
 
+                    // Mark the AI as done thinking.
                     aiThinking = false; })
                     .detach();
             }
@@ -155,6 +182,7 @@ void GameController::handleClick(board &b, int row, int col)
     }
 }
 
+// Returns true if the piece at the given square belongs to the player whose turn it is.
 bool GameController::isCurrentPlayersPiece(const board &b, int row, int col) const
 {
     char piece = b.getPieceAt8x8(row, col);
@@ -166,13 +194,16 @@ bool GameController::isCurrentPlayersPiece(const board &b, int row, int col) con
         return (piece == 'r' || piece == 'R');
 }
 
+// Applies the AI's completed move to the live board once the background thread has found it.
 void GameController::updateAI(board &b)
 {
+    // Only apply the AI move once it is ready and no animation is currently active.
     if (aiMoveReady && !animation.active)
     {
         Square from;
         Square to;
 
+        // Copy the AI move out of shared state safely.
         {
             std::lock_guard<std::mutex> lock(aiMutex);
             from = aiFrom;
@@ -180,12 +211,14 @@ void GameController::updateAI(board &b)
             aiMoveReady = false;
         }
 
+        // Store the moving piece before modifying the board.
         char movingPiece = b.getPieceAt8x8(from.row, from.col);
 
-        // NEW: fetch full path before applying move
+        // Get the full move path before applying the move.
         std::vector<std::pair<int, int>> pathPairs =
             b.getMovePath8x8(from.row, from.col, to.row, to.col);
 
+        // Apply the AI move to the actual live board.
         bool aiApplied = b.tryMove8x8(from.row, from.col, to.row, to.col);
 
         if (aiApplied)
@@ -193,7 +226,7 @@ void GameController::updateAI(board &b)
             std::cout << "AI moved from (" << from.row << ", " << from.col
                       << ") to (" << to.row << ", " << to.col << ")\n";
 
-            // NEW: store path
+            // Store the move path for animation.
             animationPath.clear();
             animationPathIndex = 1;
 
@@ -205,7 +238,7 @@ void GameController::updateAI(board &b)
                 animationPath.push_back(sq);
             }
 
-            // For now, animate only the first segment if available.
+            // Start animating the first segment of the AI move.
             if (animationPath.size() >= 2)
             {
                 startMoveAnimation(movingPiece,
@@ -214,6 +247,7 @@ void GameController::updateAI(board &b)
             }
             else
             {
+                // Fallback for simple moves or missing path data.
                 startMoveAnimation(movingPiece,
                                    from.row, from.col,
                                    to.row, to.col);
@@ -226,6 +260,7 @@ void GameController::updateAI(board &b)
     }
 }
 
+// Continues a multi-segment animation path, such as a multi-jump move.
 void GameController::updateAnimation()
 {
     // If a segment is still animating, do nothing.
@@ -244,7 +279,7 @@ void GameController::updateAnimation()
         return;
     }
 
-    // Start the next segment in the stored path.
+    // Continue animating the same piece along the next segment of the path.
     char piece = animation.piece;
 
     int fromIndex = animationPathIndex;
@@ -256,5 +291,6 @@ void GameController::updateAnimation()
                        animationPath[toIndex].row,
                        animationPath[toIndex].col);
 
+    // Advance to the next segment for the following update.
     animationPathIndex++;
 }

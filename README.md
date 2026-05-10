@@ -40,8 +40,4 @@ to decide it's move. There is no time limit for a human player to determine his 
     r
 
 where the first 8 rows represent the actual board. R denotes a red king. B denotes a black king. r and b are red and black
-normal pieces respectively. 'e' represents empty spaces. The 9th line of the input file must be either 
-'r' or 'b' to denote whose turn it will be. The program uses escape sequences to print text in color.
-Red pieces get printed in magenta and black pieces get printed in cyan. 
-Note: Run the program's executable in terminal instead of in an IDE (such as Eclipse's) console
-since the escape sequences may also be printed in the IDE's console.
+normal pieces respectively. 'e' represents empty spaces.

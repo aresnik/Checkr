@@ -6,16 +6,10 @@
 
 #include <assert.h>
 #include "board.h"
-#include <fstream>
 #include <cctype>
 #include <list>
-#include <string>
-#include <sstream>
 
 using std::list;
-using std::string;
-
-bool board::isComputer[2];
 
 int board::timeLimit = 30;
 

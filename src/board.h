@@ -7,12 +7,9 @@
 #ifndef BOARD_H_
 #define BOARD_H_
 
-#include <cctype>
-#include <fstream>
 #include <iostream>
 #include <list>
 #include <string>
-#include <utility>
 #include <vector>
 
 class jump
@@ -49,8 +46,9 @@ class jump
 	int key;
 
 	// constructor for each data value
-	jump(char jpingp, char piece, int xs, int ys, int xc, int yc, int xe, int ye, jump *p, int k) : prev(p), jumpingPiece(jpingp), noNext(true), numTimes(0), c(piece), xs(xs), ys(ys),
-																									x(xc), y(yc), xend(xe), yend(ye), key(k) {}
+	jump(char jpingp, char piece, int xs, int ys, int xc, int yc, int xe, int ye, jump *p, int k)
+		: prev(p), jumpingPiece(jpingp), noNext(true), numTimes(0), c(piece), xs(xs), ys(ys),
+		  x(xc), y(yc), xend(xe), yend(ye), key(k) {}
 
 	//---------------------------------------------------------------------------------
 	// friend classes:
@@ -110,7 +108,7 @@ class board
 
 	//[0] for black, [1] for red
 	// default initialized to false since it's a static array
-	static bool isComputer[2];
+	// static bool isComputer[2];
 
 	//---------------------------------------------------------------------------------
 	// functions for board creation, found in board.cpp:
@@ -125,7 +123,7 @@ class board
 	//   called by makeMove, which is found in boardPublic.cpp
 	//   is inlined
 	// 5: converts a command stored in the form 2 3 3 2 -1 to (2,3) -> (3, 2)
-	//   called in inputCommand in boardPrivate.cpp
+	//   called in inputCommand in boardPublic.cpp
 	// 6: create a list of moves by calling this
 	//   is called each time a new board gets created after a move is made
 	//   called by evaluate, in boardPublic.cpp
@@ -140,13 +138,13 @@ public:
 	char getTurnPublic() const;
 	std::list<move *> &getMoveList();
 
-	int toExpandedCol(int row, int compressed_col) const;
+	int toExpandedCol(int row, int compressedCol) const;
 	char getPieceAt8x8(int row, int col) const;
 
 	std::vector<std::pair<int, int>> getLegalDestinationsForSquare(int row, int col);
 
-	bool tryMove8x8(int from_row, int from_col, int to_row, int to_col);
-	bool findBestMove8x8(int time_limit_seconds, int &from_row, int &from_col, int &to_row, int &to_col);
+	bool tryMove8x8(int fromRow, int fromCol, int toRow, int toCol);
+	bool findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRow, int &toCol);
 	std::vector<std::pair<int, int>> getMovePath8x8(int fromRow, int fromCol, int toRow, int toCol);
 
 private:
@@ -230,17 +228,12 @@ private:
 	bool listMoves();
 
 	//---------------------------------------------------------------------------------
-	// functions for printing, found in boardPrivate.cpp
+	// functions for printing, found in boardPublic.cpp
 	//---------------------------------------------------------------------------------
 	// converts a point to string form and appends it to command list for a move
 	// called by createJumpMove in boardJumps.cpp
 	// called by createMove in boardMoves.cpp
 	void convert(const int &, const int &, std::string &);
-
-	// used for printing out moves, converting the y coordinate in the matrix
-	// to the coordinate on the expanded 8x8 board
-	// called in printMoves in boardPrivate.cpp
-	int convertY(const int &x, const int &y);
 
 	//-------------------------------------------------------------------------------------
 	// FUNCTIONS AND MEMBERS UTILIZED DIRECTLY IN GAME.H:
@@ -252,19 +245,8 @@ private:
 	std::list<move *> mlist;
 
 	//---------------------------------------------------------------------------------
-	// functions found in boardPublic.cpp, functions called in game.cpp
+	// functions found in boardPublic.cpp, functions called in gameController.cpp
 	//---------------------------------------------------------------------------------
-	// determines whether or not the current turn is a computer's turn
-	// called to run alpha-beta search if necessary
-	// is inlined
-	bool isComputerTurn()
-	{
-		if (color == 'b' && isComputer[0])
-			return true;
-		if (color == 'r' && isComputer[1])
-			return true;
-		return false;
-	}
 
 	// makes the move
 	// should be used on a copy of a board when alpha-beta searching
@@ -292,15 +274,6 @@ private:
 	{
 		return color;
 	}
-
-	//---------------------------------------------------------------------------------
-	// friend classes:
-	//---------------------------------------------------------------------------------
-	// game accesses many of move's functions (see above divider)
-	friend class game;
-	// sptr is a smart pointer class that automatically manages memory for boards created on the heap
-	template <class T>
-	friend class sptr;
 };
 
 #endif /* BOARD_H_ */
