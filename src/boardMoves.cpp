@@ -1,7 +1,7 @@
 /*
  * boardMoves.cpp
  *
- *      Author: Harrison
+ *      Author: alex@alexanderresnik.com
  */
 
 #include <assert.h>
@@ -58,7 +58,6 @@ void board::checkNeighbors(int &x, int &y)
 }
 
 // creates the move given the beginning and end positions of the move
-// also creates the command associated with the move
 // check for valid positions and
 // check to make sure the adjacent piece is empty
 void board::createMove(const int &xi, const int &yi, int xf, int yf)
@@ -67,9 +66,9 @@ void board::createMove(const int &xi, const int &yi, int xf, int yf)
 	{
 		move *m = new move(arr[xi][yi], xi, yi, xf, yf);
 		mlist.push_back(m);
-		convert(xi, yi, m->command);
-		convert(xf, yf, m->command);
-		m->command += "-1";
+
+		addPathPoint(m, xi, yi);
+		addPathPoint(m, xf, yf);
 	}
 }
 

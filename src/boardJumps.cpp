@@ -1,7 +1,7 @@
 /*
  * boardJumps.cpp
  *
- *      Author: Harrison
+ *      Author: alex@alexanderresnik.com
  */
 
 #include <assert.h>
@@ -87,10 +87,13 @@ void board::createJumpMove(list<jump *> &jlist)
 				}
 				m->xi = m->jpoints.front()->xs;
 				m->yi = m->jpoints.front()->ys;
-				convert(m->jpoints.front()->xs, m->jpoints.front()->ys, m->command);
+
+				addPathPoint(m, m->jpoints.front()->xs, m->jpoints.front()->ys);
+
 				for (list<jump *>::iterator it = m->jpoints.begin(); it != m->jpoints.end(); ++it)
 				{
-					convert((*it)->xend, (*it)->yend, m->command);
+					addPathPoint(m, (*it)->xend, (*it)->yend);
+
 					if ((*it)->noNext)
 					{
 						m->xf = (*it)->xend;
@@ -99,7 +102,6 @@ void board::createJumpMove(list<jump *> &jlist)
 				}
 
 				mlist.push_back(m);
-				m->command += "-1";
 				undoMove(m);
 			}
 		}

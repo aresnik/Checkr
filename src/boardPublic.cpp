@@ -1,7 +1,7 @@
 /*
  * boardPublic.cpp
  *
- *      Author: Harrison
+ *      Author: alex@alexanderresnik.com
  */
 
 #include <assert.h>
@@ -172,30 +172,10 @@ void board::startup()
 	reset();
 }
 
-// converts a position on the compressed 8x4 matrix
-// to a component of a command for the expanded 8x8 matrix
-// string s is the command the point is appended to
-// don't need to bound check because that has
-// already been done when creating moves and jumps
-// called by createJumpMove in boardJumps.cpp
-// called by createMove in boardMove.cpp
-void board::convert(const int &x, const int &y, string &s)
+void board::addPathPoint(move *m, int x, int y)
 {
-	assert(0 <= x && x <= 7 && 0 <= y && y <= 3);
-	char c1 = '0' + x;
-	char c2;
-	if (x % 2 == 0)
-	{
-		c2 = '0' + (2 * y + 1);
-	}
-	else
-	{
-		c2 = '0' + (2 * y);
-	}
-	s += c1;
-	s += ' ';
-	s += c2;
-	s += ' ';
+	// New structured path
+	m->path8x8.push_back({x, toExpandedCol(x, y)});
 }
 
 std::vector<std::pair<int, int>> board::getLegalDestinationsForSquare(int row, int col)
@@ -294,34 +274,16 @@ std::vector<std::pair<int, int>> board::getMovePath8x8(int fromRow, int fromCol,
 		return path;
 	}
 
-	for (std::list<move *>::iterator it = mlist.begin(); it != mlist.end(); ++it)
+	for (move *m : mlist)
 	{
-		move *m = *it;
+		int startCol = toExpandedCol(m->xi, m->yi);
+		int endCol = toExpandedCol(m->xf, m->yf);
 
-		int start_col = toExpandedCol(m->xi, m->yi);
-		int end_col = toExpandedCol(m->xf, m->yf);
-
-		if (m->xi == fromRow && start_col == fromCol &&
-			m->xf == toRow && end_col == toCol)
+		if (m->xi == fromRow && startCol == fromCol &&
+			m->xf == toRow && endCol == toCol)
 		{
-			// Parse the command string.
-			// Format is:
-			// "r1 c1 r2 c2 ... -1"
-			// where each pair is already in expanded 8x8 coordinates.
-			std::stringstream ss(m->command);
-			int row = -1;
-			int col = -1;
-
-			while (ss >> row)
-			{
-				if (row == -1)
-					break;
-
-				if (!(ss >> col))
-					break;
-
-				path.push_back(std::make_pair(row, col));
-			}
+			for (const Square &sq : m->path8x8)
+				path.push_back({sq.row, sq.col});
 
 			return path;
 		}

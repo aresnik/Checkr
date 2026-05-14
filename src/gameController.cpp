@@ -1,7 +1,7 @@
 /*
  * gameController.cpp
  *
- *      Author: Alexander Resnik
+ *      Author: alex@alexanderresnik.com
  */
 
 #include "gameController.h"

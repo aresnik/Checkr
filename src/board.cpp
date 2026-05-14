@@ -1,7 +1,7 @@
 /*
  * board.cpp
  *
- *      Author: Harrison
+ *      Author: alex@alexanderresnik.com
  */
 
 #include <assert.h>

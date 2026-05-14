@@ -1,23 +1,23 @@
 //============================================================================
 // Name        : main.cpp
-// Author      : Alexander Resnik
+// Author      : alex@alexanderresnik.com
 //============================================================================
 
+#define SDL_MAIN_USE_CALLBACKS 1
+
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #include <iostream>
 #include <vector>
 #include "board.h"
 #include "gameController.h"
 
-// Window and board layout constants.
-// The board is 8x8, and since the window is 800x800, each square is 100x100 pixels.
 const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 800;
 const int BOARD_SIZE = 8;
 const int TILE_SIZE = WINDOW_WIDTH / BOARD_SIZE;
 
 // Draws the 8x8 checkerboard background.
-// This function only draws the squares, not the pieces.
 void drawCheckerboard(SDL_Renderer *renderer)
 {
     // Loop through every row and column on the visual 8x8 board.
@@ -268,113 +268,148 @@ void drawThinkingIndicator(SDL_Renderer *renderer, bool aiThinking)
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 }
 
-int main(int argc, char *argv[])
+struct AppState
 {
-    // Initialize SDL's video subsystem.
-    // SDL3 returns true on success and false on failure.
+    SDL_Window *window = nullptr;
+    SDL_Renderer *renderer = nullptr;
+
+    board b;
+    GameController controller;
+};
+
+SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
+{
+    SDL_SetAppMetadata("Checkers", "1.0", "com.alexresnik.checkers");
+
     if (!SDL_Init(SDL_INIT_VIDEO))
     {
         std::cerr << "SDL_Init Error: " << SDL_GetError() << '\n';
-        return 1;
+        return SDL_APP_FAILURE;
     }
 
-    // Create the game window.
-    // In SDL3, the window creation call is simpler than SDL2.
-    SDL_Window *window = SDL_CreateWindow("Checkers", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    AppState *state = new AppState();
 
-    // If the window could not be created, clean up SDL and exit.
-    if (!window)
+    state->window = SDL_CreateWindow(
+        "Checkers",
+        WINDOW_WIDTH,
+        WINDOW_HEIGHT,
+        0);
+
+    if (!state->window)
     {
         std::cerr << "SDL_CreateWindow Error: " << SDL_GetError() << '\n';
-        SDL_Quit();
-        return 1;
+        delete state;
+        return SDL_APP_FAILURE;
     }
 
-    // Create the renderer used for all drawing.
-    // In SDL3, this version does not use the old SDL2 renderer index or accelerated flag.
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);
-    if (!renderer)
+    state->renderer = SDL_CreateRenderer(state->window, nullptr);
+
+    if (!state->renderer)
     {
         std::cerr << "SDL_CreateRenderer Error: " << SDL_GetError() << '\n';
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
+        SDL_DestroyWindow(state->window);
+        delete state;
+        return SDL_APP_FAILURE;
     }
 
-    // Create the board model and the controller.
-    // The board stores the game state.
-    // The controller handles clicks, selected squares, legal moves, AI updates, and animation state.
-    board b;
-    GameController controller;
+    *appstate = state;
 
-    bool running = true;
-    SDL_Event event;
+    return SDL_APP_CONTINUE;
+}
 
-    // Main game loop.
-    // This loop continues until the player closes the window.
-    while (running)
+SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
+{
+    AppState *state = static_cast<AppState *>(appstate);
+
+    if (event->type == SDL_EVENT_QUIT)
     {
-        // Process all pending SDL events, such as window close or mouse clicks.
-        while (SDL_PollEvent(&event))
-        {
-            // SDL3 renamed the quit event to SDL_EVENT_QUIT.
-            if (event.type == SDL_EVENT_QUIT)
-            {
-                running = false;
-            }
-            else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
-            {
-                // Only react to left mouse button clicks.
-                if (event.button.button == SDL_BUTTON_LEFT)
-                {
-                    // SDL3 mouse coordinates are floating-point values.
-                    float mouseX = event.button.x;
-                    float mouseY = event.button.y;
-
-                    // Convert pixel coordinates into board row/column coordinates.
-                    int col = (int)(mouseX / TILE_SIZE);
-                    int row = (int)(mouseY / TILE_SIZE);
-
-                    // Let the controller decide what the click means:
-                    // selecting a piece, changing selection, or attempting a move.
-                    controller.handleClick(b, row, col);
-                }
-            }
-        }
-
-        // Allow the controller to finish or apply any AI move that is ready.
-        // This keeps the SDL event loop responsive while the AI works asynchronously.
-        controller.updateAI(b);
-
-        // Advance any active movement animation.
-        controller.updateAnimation();
-
-        // Clear the screen before drawing the new frame.
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
-
-        // Draw the frame in layers:
-        // 1. board
-        // 2. selection highlight
-        // 3. legal move markers
-        // 4. non-animated pieces
-        // 5. animated moving piece
-        // 6. AI thinking indicator
-        drawCheckerboard(renderer);
-        drawSelectedSquare(renderer, controller.selectedRow, controller.selectedCol);
-        drawLegalMoves(renderer, controller.legalMoves);
-        drawPieces(renderer, b, controller.animation);
-        drawMoveAnimation(renderer, controller.animation);
-        drawThinkingIndicator(renderer, controller.aiThinking);
-
-        // Present the completed frame to the window.
-        SDL_RenderPresent(renderer);
+        return SDL_APP_SUCCESS;
     }
 
-    // Clean up SDL resources before exiting.
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+    {
+        if (event->button.button == SDL_BUTTON_LEFT)
+        {
+            // SDL3 mouse coordinates are floating-point values.
+            float mouseX = event->button.x;
+            float mouseY = event->button.y;
 
-    return 0;
+            // Convert pixel coordinates into board row/column coordinates.
+            int col = static_cast<int>(mouseX / TILE_SIZE);
+            int row = static_cast<int>(mouseY / TILE_SIZE);
+
+            // Let the controller decide what the click means:
+            // selecting a piece, changing selection, or attempting a move.
+            state->controller.handleClick(state->b, row, col);
+        }
+    }
+
+    return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult SDL_AppIterate(void *appstate)
+{
+    AppState *state = static_cast<AppState *>(appstate);
+
+    // Allow the controller to finish or apply any AI move that is ready.
+    // This keeps the SDL event loop responsive while the AI works asynchronously.
+    state->controller.updateAI(state->b);
+
+    // Advance any active movement animation.
+    state->controller.updateAnimation();
+
+    SDL_SetRenderDrawColor(state->renderer, 0, 0, 0, 255);
+    SDL_RenderClear(state->renderer);
+
+    // Draw the frame in layers:
+    // 1. board
+    // 2. selection highlight
+    // 3. legal move markers
+    // 4. non-animated pieces
+    // 5. animated moving piece
+    // 6. AI thinking indicator
+    drawCheckerboard(state->renderer);
+    drawSelectedSquare(
+        state->renderer,
+        state->controller.selectedRow,
+        state->controller.selectedCol);
+
+    drawLegalMoves(
+        state->renderer,
+        state->controller.legalMoves);
+
+    drawPieces(
+        state->renderer,
+        state->b,
+        state->controller.animation);
+
+    drawMoveAnimation(
+        state->renderer,
+        state->controller.animation);
+
+    drawThinkingIndicator(
+        state->renderer,
+        state->controller.aiThinking);
+
+    SDL_RenderPresent(state->renderer);
+
+    return SDL_APP_CONTINUE;
+}
+
+void SDL_AppQuit(void *appstate, SDL_AppResult result)
+{
+    AppState *state = static_cast<AppState *>(appstate);
+
+    if (state)
+    {
+        if (state->renderer)
+            SDL_DestroyRenderer(state->renderer);
+
+        if (state->window)
+            SDL_DestroyWindow(state->window);
+
+        delete state;
+    }
+
+    SDL_Quit();
 }

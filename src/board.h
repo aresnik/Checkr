@@ -1,7 +1,7 @@
 /*
  * board.h
  *
- *      Author: Harrison
+ *      Author: alex@alexanderresnik.com
  */
 
 #ifndef BOARD_H_
@@ -11,6 +11,12 @@
 #include <list>
 #include <string>
 #include <vector>
+
+struct Square
+{
+	int row;
+	int col;
+};
 
 class jump
 {
@@ -72,12 +78,10 @@ class move
 	int xf;
 	int yf;
 
-	// command used to map a string to the move
-	// used for when the player enters a string for a move
-	std::string command;
-
 	// list storing all the jumps made by the move
 	std::list<jump *> jpoints;
+
+	std::vector<Square> path8x8;
 
 	// constructor for move
 	move(char c, int xs, int ys, int xe, int ye) : mP(c), xi(xs), yi(ys), xf(xe), yf(ye) {}
@@ -91,7 +95,7 @@ class move
 	//---------------------------------------------------------------------------------
 	// board creates moves and it accesses many of move's members
 	friend class board;
-	// move's member: command is accessed in game::outputMessage()
+
 	friend class game;
 };
 
@@ -122,9 +126,7 @@ class board
 	//   called in game.cpp by alphabeta
 	//   called by makeMove, which is found in boardPublic.cpp
 	//   is inlined
-	// 5: converts a command stored in the form 2 3 3 2 -1 to (2,3) -> (3, 2)
-	//   called in inputCommand in boardPublic.cpp
-	// 6: create a list of moves by calling this
+	// 5: create a list of moves by calling this
 	//   is called each time a new board gets created after a move is made
 	//   called by evaluate, in boardPublic.cpp
 	//   is inlined
@@ -228,12 +230,10 @@ private:
 	bool listMoves();
 
 	//---------------------------------------------------------------------------------
-	// functions for printing, found in boardPublic.cpp
+	// functions found in boardPublic.cpp
 	//---------------------------------------------------------------------------------
-	// converts a point to string form and appends it to command list for a move
-	// called by createJumpMove in boardJumps.cpp
-	// called by createMove in boardMoves.cpp
-	void convert(const int &, const int &, std::string &);
+
+	void addPathPoint(move *m, int x, int y);
 
 	//-------------------------------------------------------------------------------------
 	// FUNCTIONS AND MEMBERS UTILIZED DIRECTLY IN GAME.H:

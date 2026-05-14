@@ -1,7 +1,7 @@
 /*
  * gameController.h
  *
- *      Author: Alexander Resnik
+ *      Author: alex@alexanderresnik.com
  */
 
 #ifndef GAMECONTROLLER_H
@@ -12,12 +12,6 @@
 #include <atomic>
 #include <mutex>
 #include "board.h"
-
-struct Square
-{
-    int row;
-    int col;
-};
 
 // Stores all data related to animating a checker movement
 struct MoveAnimation

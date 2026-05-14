@@ -1,43 +1,189 @@
-Checkers in C++
-============
-This checkers game is a port from an character based game.. 
+# Checkers in C++
 
-How does it work?
-============
-The checker board is represented using a 8 x 4 matrix of characters. 32 positions are needed instead of 64 positions since only half 
-of the squares are legal game spaces. This program utilizes iterative deepening and alpha-beta pruning with minimax to determine which move the computer will
-make. A heuristic function is utilized for assigning values to states generated in the alpha-beta minimax tree. Player 1 is black and player 2
-is red. Player 1 tries to maximize the heuristic function while player 2 tries to minimize it. The heuristic evaluates a state
-where player 1 loses as -infinity while it evaluates a state where player 2 loses as +infinity. 
-There are four instances in which a terminal state can occur: 
-  - 1. Red's (R) pieces are reduced to 0.
-  - 2. Black's (B) pieces are reduced to 0.
-  - 3. Red has no available moves left.
-  - 4. Black has no available moves left.
-  
-What does each class do?
-============
-The board class holds a representation of the checkerboard using an 8 x 4 matrix of characters. 32 positions are needed instead of 64 positions since only half of the squares are legal game spaces. The board class also keeps track of turns, time limits, and whether or not a player is a computer. The board class has member functions that create moves, test whether or not the game has ended, print the board to screen, and modify the board. Several members of the board class are used in the game class to implement alpha-beta search. 
+A modern GUI-based Checkers game written in C++ using SDL3.
 
-The move class contains a list of jumps as well as all the data necessary to move a piece from one location to another on the board. The moves are created after all the jumps are created. The jumps are created by checking each direction for a valid piece and checking for valid jumps. Repetitions for jumps (jumping over the same square twice) are prevented by giving each jump a key and by maintaining predecessors for each jump. This key is a linear combination of its position on the board. By reversing the key (for example 123 -> 321) and maintaining pointers to previous jumps, the program can make sure a jump over a certain square is never repeated during one multiple jump.
+This project began as a classic terminal-based Checkers AI and has since been transformed into a modern event-driven desktop application featuring a graphical user interface, asynchronous AI processing, animations, and a modular architecture.
 
-The game class implements alpha-beta search. It also calls the members of the board class to print the board to the screen and to start up the game. It keeps track of the current state of the game by maintaining a pointer to the current board. With the smart pointer wrapper, which automatically de-allocates dynamic memory, alpha-beta search is able to generate many game boards and not have to manually call delete on each board created. The game class also maintains the time_t values to time a computer’s turn. The main function creates a game and makes the game start.
-The evaluation function is calculated based on number and type of pieces left, how close a regular piece is to be a king, endgame positions, and a pseudorandom number. The comments for the evaluation function describe the breakdown of how it’s calculated.
+## Features
 
-What modes of play does it feature?
-============
-The game features player vs computer and computer vs computer modes. The computer can be allotted between 3 to 60 seconds
-to decide it's move. There is no time limit for a human player to determine his or her move. The designated input file must look something like:]
+- Graphical user interface using SDL3
+- Human vs Computer gameplay
+- Computer vs Computer gameplay
+- Mouse-based piece selection and movement
+- Animated checker movement
+- Forced jump enforcement
+- King promotion
+- Asynchronous AI processing (GUI remains responsive while AI searches)
+- Iterative deepening minimax AI
+- Alpha-beta pruning
+- Heuristic board evaluation
+- Modern event-driven architecture
+- Cross-platform C++ project structure
 
-     e e b e
-    e e e e
-     e e r e
-    e e e e
-     e R e B
-    e e e e
-     e e e e
-    e e e e
-    r
+---
 
-where the first 8 rows represent the actual board. R denotes a red king. B denotes a black king. r and b are red and black
-normal pieces respectively. 'e' represents empty spaces.
+# How It Works
+
+The game engine uses a compact 8 x 4 board representation internally instead of storing all 64 squares. Since only the dark squares are playable in Checkers, only 32 positions are required.
+
+The AI uses:
+
+- Minimax search
+- Alpha-beta pruning
+- Iterative deepening
+- Heuristic evaluation functions
+
+The evaluation system considers:
+
+- Number of remaining pieces
+- Kings vs normal pieces
+- Piece positioning
+- Advancement toward promotion
+- Endgame positioning
+- Mobility and available moves
+
+Terminal game states occur when:
+
+1. Red has no remaining pieces
+2. Black has no remaining pieces
+3. Red has no legal moves
+4. Black has no legal moves
+
+---
+
+# Architecture
+
+## board Class (Game Engine / Model)
+
+The `board` class represents the complete logical game state.
+
+Responsibilities include:
+
+- Board representation
+- Move generation
+- Jump generation
+- Forced jump logic
+- Move validation
+- Applying and undoing moves
+- Turn management
+- Win/loss detection
+- Board evaluation support
+
+The board internally stores legal moves and supports efficient move simulation for AI search.
+
+---
+
+## move Class
+
+The `move` class represents a complete move sequence, including:
+
+- Standard moves
+- Single jumps
+- Multiple jumps
+
+It stores all information required to apply or undo a move during gameplay or AI search.
+
+---
+
+## GameController Class
+
+The `GameController` class manages overall game flow and orchestration between the engine and the graphical interface.
+
+Responsibilities include:
+
+- Handling player turns
+- Coordinating AI turns
+- Launching asynchronous AI search threads
+- Managing move animations
+- Tracking game state
+- Synchronizing gameplay with rendering
+
+The AI operates on copies of the board state to prevent blocking or corrupting the active game state during search.
+
+---
+
+## window Class (SDL Layer / View)
+
+The `window` class handles all SDL3-related functionality.
+
+Responsibilities include:
+
+- Window creation
+- Rendering the checkerboard
+- Drawing pieces
+- Mouse input handling
+- Highlighting legal moves
+- Animation rendering
+- Texture management
+- Event processing
+
+The rendering system is fully event-driven and continuously updates while the AI searches in the background.
+
+---
+
+# Artificial Intelligence
+
+The AI uses iterative deepening with alpha-beta pruning to search possible game states efficiently.
+
+The search system:
+
+- Expands legal moves recursively
+- Evaluates resulting board states
+- Uses pruning to eliminate unnecessary branches
+- Selects the best move according to the heuristic evaluation function
+
+The asynchronous AI system allows the computer player to think on a separate thread while the GUI remains responsive.
+
+---
+
+# Technologies Used
+
+- C++
+- SDL3
+- Standard Library threading (`std::async`, `std::future`)
+- Modern event-driven architecture
+- Object-oriented design
+
+---
+
+# Future Improvements
+
+Planned and experimental features include:
+
+- Improved AI evaluation heuristics
+- Enhanced move animations
+- Sound effects and music
+- AI difficulty settings
+- Opening book support
+- Transposition tables
+- Network multiplayer
+- Mobile platform support
+
+---
+
+# Building the Project
+
+The project is built using:
+
+- C++
+- SDL3
+- Makefiles
+- Visual Studio Code
+
+Typical build command:
+
+```bash
+make
+```
+
+Run the executable:
+
+```bash
+./bin/checkers
+```
+
+---
+
+# Project Status
+
+This project is currently under active development as part of an ongoing modernization and refactoring effort from a legacy terminal-based engine into a fully featured graphical Checkers application.
