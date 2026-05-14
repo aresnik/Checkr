@@ -65,7 +65,7 @@ void board::createJump(list<jump *> &jlist, char c, int xs, int ys, int xj, int 
 // add all the appropriate jumps to the move's list of jumps via backtracking
 // increment the jump's numTimes
 // repeat the loop until the first jump was added to the move's jump list
-// add the start point to the move's start position and to command
+// add the start point to the move's start position
 // undoes each jump, so the starting character is where it began before getting erased
 // replaces the 'e's with original characters
 void board::createJumpMove(list<jump *> &jlist)
