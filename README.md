@@ -2,13 +2,14 @@
 
 A modern GUI-based Checkers game written in C++ using SDL3.
 
-This project began as a classic terminal-based Checkers AI and has since been transformed into a modern event-driven desktop application featuring a graphical user interface, asynchronous AI processing, animations, and a modular architecture.
+This project began as a classic terminal-based Checkers AI and has since been transformed into a modern event-driven application featuring a graphical user interface, asynchronous AI processing, animations, and a modular architecture.
 
 ## Features
 
 - Graphical user interface using SDL3
 - Human vs Computer gameplay
-- Computer vs Computer gameplay
+- Human vs Human gameplay (comming)
+- Computer vs Computer gameplay(comming)
 - Mouse-based piece selection and movement
 - Animated checker movement
 - Forced jump enforcement

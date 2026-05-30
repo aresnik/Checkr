@@ -20,9 +20,10 @@
 #include <list>
 #include <string>
 #include <vector>
-#include <ctime>
+#include <chrono>
 #include <functional>
 #include <sstream>
+#include <random>
 
 using std::cout;
 using std::endl;
@@ -218,9 +219,12 @@ int board::evaluate()
 	c *= 10000;
 	d *= 100;
 
-	// Add a tiny random term to break exact ties. Flip its sign on red's turn
-	// so the random nudge remains consistent with the side to move.
-	int e = rand() % 100;
+	// Modern C++ random number generation for consistent cross-platform behavior.
+	static std::mt19937 gen(std::random_device{}());
+	std::uniform_int_distribution<> dis(0, 99);
+	int e = dis(gen);
+
+	// Flip its sign on red's turn so the random nudge remains consistent.
 	if (color == 'r')
 		e = -e;
 
@@ -428,10 +432,7 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 	bool timeUp = false;
 	bool reachedEnd = false;
 
-	std::time_t startTime = 0;
-	std::time_t endTime = 0;
-	std::time_t startTimeD = 0;
-	std::time_t endTimeD = 0;
+	auto startTime = std::chrono::steady_clock::now();
 
 	// Local recursive alpha-beta function.
 	//
@@ -472,10 +473,11 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 		{
 			for (; iter != b.mlist.end(); ++iter)
 			{
-				std::time(&endTime);
+				auto currentTime = std::chrono::steady_clock::now();
+				auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime).count();
 
 				// Stop searching before the allotted time expires completely.
-				if (std::difftime(endTime, startTime) >= (timeLimit - 1))
+				if (elapsed >= (timeLimit - 1))
 				{
 					timeUp = true;
 					break;
@@ -512,10 +514,11 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 		{
 			for (; iter != b.mlist.end(); ++iter)
 			{
-				std::time(&endTime);
+				auto currentTime = std::chrono::steady_clock::now();
+				auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime).count();
 
 				// Stop searching before the allotted time expires completely.
-				if (std::difftime(endTime, startTime) >= (timeLimit - 1))
+				if (elapsed >= (timeLimit - 1))
 				{
 					timeUp = true;
 					break;
@@ -549,27 +552,25 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 		}
 	};
 
-	std::time(&startTime);
-
 	// Iterative deepening loop. The AI keeps deepening the search while time
 	// remains. bestM is only updated after a depth completes, which avoids
 	// returning a partially searched move from an interrupted depth.
 	for (int depth = 1; depth != maxIterDepth; ++depth)
 	{
-		std::time(&startTimeD);
+		auto startTimeD = std::chrono::steady_clock::now();
 
 		maxdepth = depth;
 		alphabeta(*this, depth,
 				  std::numeric_limits<int>::min(),
 				  std::numeric_limits<int>::max());
 
-		std::time(&endTimeD);
+		auto endTimeD = std::chrono::steady_clock::now();
+		auto durationD = std::chrono::duration_cast<std::chrono::seconds>(endTimeD - startTimeD).count();
 
 		// If the last completed depth consumed a large fraction of the allowed
 		// time, do not risk starting another much deeper iteration.
-		if (std::difftime(endTimeD, startTimeD) >= (timeLimit / 2))
+		if (durationD >= (timeLimit / 2))
 		{
-			std::time(&endTime);
 			timeUp = true;
 			break;
 		}

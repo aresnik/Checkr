@@ -219,6 +219,9 @@ public:
 	// for a multi-jump it includes intermediate landing squares.
 	std::vector<std::pair<int, int>> getMovePath8x8(int fromRow, int fromCol, int toRow, int toCol);
 
+	// Initializes or resets the board for a new game.
+	void startup();
+
 private:
 	// Switches the current side to move after a move is applied.
 	void changeTurn()
@@ -347,9 +350,6 @@ private:
 	//
 	// Positive scores favor black. Negative scores favor red.
 	int evaluate();
-
-	// Initializes or resets the board for a new game.
-	void startup();
 
 	// Internal accessor used by search code.
 	char getTurn()

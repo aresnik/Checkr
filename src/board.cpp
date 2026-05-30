@@ -212,18 +212,18 @@ int board::toExpandedCol(int row, int compressedCol) const
  *   'R' = red king
  *   'e' = empty playable square
  *
- * This function returns 'x' when the requested square is invalid or not
+ * This function returns 'e' when the requested square is invalid or not
  * playable. That lets the SDL/GUI layer safely ask about any screen square
  * without needing direct knowledge of the compressed arr[8][4] layout.
  */
 char board::getPieceAt8x8(int row, int col) const
 {
 	if (row < 0 || row >= 8 || col < 0 || col >= 8)
-		return 'x';
+		return 'e';
 
 	// Light squares are not playable in checkers and are not stored in arr.
 	if ((row + col) % 2 == 0)
-		return 'x';
+		return 'e';
 
 	int compressedCol;
 	if (row % 2 == 0)
@@ -232,7 +232,7 @@ char board::getPieceAt8x8(int row, int col) const
 		compressedCol = col / 2;
 
 	if (compressedCol < 0 || compressedCol >= 4)
-		return 'x';
+		return 'e';
 
 	return arr[row][compressedCol];
 }
