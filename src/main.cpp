@@ -297,11 +297,40 @@ void drawPieces(SDL_Renderer *renderer, AppState *state)
             if (piece == 'e' || piece == 'x')
                 continue;
 
-            if (state->controller.animation.active &&
-                row == state->controller.animation.toRow &&
-                col == state->controller.animation.toCol)
+            // If this square is part of a pending capture/restore animation, skip drawing
+            // it from the board array; we will handle its visibility in the capture loop below.
+            if (state->controller.animation.active)
             {
-                continue;
+                bool isPending = false;
+                for (const auto &cp : state->controller.pendingCaptures)
+                {
+                    if (cp.row == row && cp.col == col)
+                    {
+                        isPending = true;
+                        break;
+                    }
+                }
+                if (isPending)
+                    continue;
+            }
+
+            // If a move is currently animating, hide the static piece at its destination.
+            // Since tryMove8x8 updates the board state immediately, a multi-jump piece
+            // is already at its final square internally even while the animation is
+            // still on the first segment. We hide the final destination to prevent "flashing."
+            if (state->controller.animation.active)
+            {
+                int hideRow = state->controller.animation.toRow;
+                int hideCol = state->controller.animation.toCol;
+
+                if (!state->controller.animationPath.empty())
+                {
+                    hideRow = state->controller.animationPath.back().row;
+                    hideCol = state->controller.animationPath.back().col;
+                }
+
+                if (row == hideRow && col == hideCol)
+                    continue;
             }
 
             drawPiece(renderer, row, col, piece, state);
@@ -311,7 +340,28 @@ void drawPieces(SDL_Renderer *renderer, AppState *state)
     // Draw captured pieces that are still "waiting" to be visually removed
     for (const auto &cap : state->controller.pendingCaptures)
     {
-        if (state->controller.animationPathIndex <= cap.captureStep)
+        bool shouldDraw = false;
+        Uint64 elapsed = SDL_GetTicks() - state->controller.animation.startTime;
+        float t = static_cast<float>(elapsed) / static_cast<float>(state->controller.animation.durationMs);
+
+        if (state->controller.animation.isUndo)
+        {
+            // Undo Logic: Piece is restored. Keep hidden until jumper passes midpoint.
+            if (state->controller.animationPathIndex > cap.captureStep)
+                shouldDraw = true;
+            else if (state->controller.animationPathIndex == cap.captureStep && t >= 0.5f)
+                shouldDraw = true;
+        }
+        else
+        {
+            // Forward/Redo Logic: Piece is removed. Keep visible until jumper reaches midpoint.
+            if (state->controller.animationPathIndex < cap.captureStep)
+                shouldDraw = true;
+            else if (state->controller.animationPathIndex == cap.captureStep && t < 0.5f)
+                shouldDraw = true;
+        }
+
+        if (shouldDraw)
         {
             drawPiece(renderer, cap.row, cap.col, cap.piece, state);
         }
@@ -567,11 +617,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     if (state->newGameTexture)
         SDL_SetTextureScaleMode(state->newGameTexture, SDL_SCALEMODE_LINEAR);
 
-    // Load the pressed version of the New Game button (filled circle symbol)
-    state->newGamePressedTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/new_game_filled.png", state).c_str());
+    // Load the pressed version of the New Game button
+    state->newGamePressedTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/new_game_fill.png", state).c_str());
     if (!state->newGamePressedTexture)
     {
-        SDL_Log("Warning: Could not load new_game_filled.png, using procedural fallback.");
+        SDL_Log("Warning: Could not load new_game_fill.png, using procedural fallback.");
         state->newGamePressedTexture = createCircleTexture(state->renderer, 256, 200, 200, 200, 255);
     }
     if (state->newGamePressedTexture)
@@ -705,16 +755,21 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
                 if (state->undoPressed && insideUndo)
                 {
-                    if (state->historyIndex >= 2)
+                    if (state->historyIndex > 0)
                     {
-                        state->historyIndex -= 2; // Jump back past AI move and Player move
+                        // Get the move we are about to reverse
+                        MoveRecord m = state->history[state->historyIndex - 1];
+
+                        state->historyIndex--;
                         replayHistory(state);
+
+                        // After replay, piece is back at m.fromRow. Get it and setup reverse animation.
+                        char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
+                        state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol, true);
+
                         state->controller.selectedRow = -1;
                         state->controller.selectedCol = -1;
                         state->controller.legalMoves.clear();
-                        state->controller.animation.active = false;
-                        state->controller.aiMoveReady = false;
-                        state->controller.pendingCaptures.clear();
                         state->winner = 0;
                     }
                 }
@@ -722,16 +777,19 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
                 if (state->redoPressed && insideRedo)
                 {
-                    if (state->historyIndex + 2 <= (int)state->history.size())
+                    if (state->historyIndex < (int)state->history.size())
                     {
-                        state->historyIndex += 2; // Advance forward past Player move and AI move
-                        replayHistory(state);
+                        MoveRecord m = state->history[state->historyIndex];
+                        char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
+
+                        // IMPORTANT: Setup animation BEFORE calling tryMove8x8 so engine finds the path
+                        state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol);
+                        state->b.tryMove8x8(m.fromRow, m.fromCol, m.toRow, m.toCol);
+
+                        state->historyIndex++;
                         state->controller.selectedRow = -1;
                         state->controller.selectedCol = -1;
                         state->controller.legalMoves.clear();
-                        state->controller.animation.active = false;
-                        state->controller.aiMoveReady = false;
-                        state->controller.pendingCaptures.clear();
                         state->winner = 0;
                     }
                 }

@@ -18,7 +18,7 @@ GameController::GameController()
 }
 
 // Starts a visual animation for one piece moving from one square to another.
-void GameController::startMoveAnimation(char piece, int fromRow, int fromCol, int toRow, int toCol)
+void GameController::startMoveAnimation(char piece, int fromRow, int fromCol, int toRow, int toCol, bool isUndo)
 {
     animation.active = true;
     animation.piece = piece;
@@ -26,8 +26,56 @@ void GameController::startMoveAnimation(char piece, int fromRow, int fromCol, in
     animation.fromCol = fromCol;
     animation.toRow = toRow;
     animation.toCol = toCol;
+    animation.isUndo = isUndo;
     animation.startTime = SDL_GetTicks();
     animation.durationMs = 500;
+}
+
+void GameController::setupPathAnimation(board &b, char piece, int fR, int fC, int tR, int tC, bool isUndo)
+{
+    // Always query the forward path from the engine.
+    // If isUndo is true, we will reverse this path visually for the animation later.
+    std::vector<std::pair<int, int>> pathPairs = b.getMovePath8x8(fR, fC, tR, tC);
+    animationPath.clear();
+    pendingCaptures.clear();
+    animationPathIndex = 1;
+
+    if (!pathPairs.empty())
+    {
+        for (size_t i = 0; i < pathPairs.size(); ++i)
+        {
+            animationPath.push_back({pathPairs[i].first, pathPairs[i].second});
+
+            // Identify captured pieces for both Redo and Undo.
+            if (i < pathPairs.size() - 1)
+            {
+                int r1 = pathPairs[i].first, c1 = pathPairs[i].second;
+                int r2 = pathPairs[i + 1].first, c2 = pathPairs[i + 1].second;
+
+                if (std::abs(r1 - r2) > 1)
+                {
+                    int capR = (r1 + r2) / 2;
+                    int capC = (c1 + c2) / 2;
+                    int step = isUndo ? (int)(pathPairs.size() - 1 - i) : (int)i + 1;
+                    pendingCaptures.push_back({capR, capC, b.getPieceAt8x8(capR, capC), step});
+                }
+            }
+        }
+
+        if (isUndo)
+        {
+            std::reverse(animationPath.begin(), animationPath.end());
+        }
+
+        startMoveAnimation(piece,
+                           animationPath[0].row, animationPath[0].col,
+                           animationPath[1].row, animationPath[1].col, isUndo);
+    }
+    else
+    {
+        // Fallback if path finding fails
+        startMoveAnimation(piece, fR, fC, tR, tC, isUndo);
+    }
 }
 
 // Converts the board's legal destination list into Square objects for the UI.
@@ -95,32 +143,9 @@ void GameController::handleClick(board &b, int row, int col, std::vector<MoveRec
         }
         else
         {
-            // Store the piece before moving so the animation still knows what to draw.
+            // Store piece type and setup animation before applying the move.
             char movingPiece = b.getPieceAt8x8(selectedRow, selectedCol);
-
-            // Get the full move path before applying the move.
-            // This is important for jump chains, where the move may include multiple segments.
-            std::vector<std::pair<int, int>> pathPairs =
-                b.getMovePath8x8(selectedRow, selectedCol, row, col);
-
-            // Identify captured pieces before applying the move to the board
-            pendingCaptures.clear();
-            if (pathPairs.size() >= 2)
-            {
-                for (size_t i = 0; i < pathPairs.size() - 1; ++i)
-                {
-                    int r1 = pathPairs[i].first, c1 = pathPairs[i].second;
-                    int r2 = pathPairs[i+1].first, c2 = pathPairs[i+1].second;
-
-                    // If the distance is 2 squares, it's a jump.
-                    if (std::abs(r1 - r2) > 1)
-                    {
-                        int capR = (r1 + r2) / 2;
-                        int capC = (c1 + c2) / 2;
-                        pendingCaptures.push_back({capR, capC, b.getPieceAt8x8(capR, capC), (int)i + 1});
-                    }
-                }
-            }
+            setupPathAnimation(b, movingPiece, selectedRow, selectedCol, row, col);
 
             // Ask the board engine to apply the move.
             bool moved = b.tryMove8x8(selectedRow, selectedCol, row, col);
@@ -137,33 +162,6 @@ void GameController::handleClick(board &b, int row, int col, std::vector<MoveRec
 
                 std::cout << "Moved from (" << selectedRow << ", " << selectedCol
                           << ") to (" << row << ", " << col << ")\n";
-
-                // Convert and store the animation path in the controller.
-                animationPath.clear();
-                animationPathIndex = 1;
-
-                for (size_t i = 0; i < pathPairs.size(); ++i)
-                {
-                    Square sq;
-                    sq.row = pathPairs[i].first;
-                    sq.col = pathPairs[i].second;
-                    animationPath.push_back(sq);
-                }
-
-                // Start animating the first segment of the path.
-                if (animationPath.size() >= 2)
-                {
-                    startMoveAnimation(movingPiece,
-                                       animationPath[0].row, animationPath[0].col,
-                                       animationPath[1].row, animationPath[1].col);
-                }
-                else
-                {
-                    // Fallback for simple moves or missing path data.
-                    startMoveAnimation(movingPiece,
-                                       selectedRow, selectedCol,
-                                       row, col);
-                }
             }
             else
             {
@@ -244,27 +242,8 @@ void GameController::updateAI(board &b, std::vector<MoveRecord> &history, int &h
         // Store the moving piece before modifying the board.
         char movingPiece = b.getPieceAt8x8(from.row, from.col);
 
-        // Get the full move path before applying the move.
-        std::vector<std::pair<int, int>> pathPairs =
-            b.getMovePath8x8(from.row, from.col, to.row, to.col);
-
-        // Identify captured pieces before the AI applies the move
-        pendingCaptures.clear();
-        if (pathPairs.size() >= 2)
-        {
-            for (size_t i = 0; i < pathPairs.size() - 1; ++i)
-            {
-                int r1 = pathPairs[i].first, c1 = pathPairs[i].second;
-                int r2 = pathPairs[i+1].first, c2 = pathPairs[i+1].second;
-
-                if (std::abs(r1 - r2) > 1)
-                {
-                    int capR = (r1 + r2) / 2;
-                    int capC = (c1 + c2) / 2;
-                    pendingCaptures.push_back({capR, capC, b.getPieceAt8x8(capR, capC), (int)i + 1});
-                }
-            }
-        }
+        // Setup animation (handles path finding and captures)
+        setupPathAnimation(b, movingPiece, from.row, from.col, to.row, to.col);
 
         // Apply the AI move to the actual live board.
         bool aiApplied = b.tryMove8x8(from.row, from.col, to.row, to.col);
@@ -280,33 +259,6 @@ void GameController::updateAI(board &b, std::vector<MoveRecord> &history, int &h
 
             std::cout << "AI moved from (" << from.row << ", " << from.col
                       << ") to (" << to.row << ", " << to.col << ")\n";
-
-            // Store the move path for animation.
-            animationPath.clear();
-            animationPathIndex = 1;
-
-            for (size_t i = 0; i < pathPairs.size(); ++i)
-            {
-                Square sq;
-                sq.row = pathPairs[i].first;
-                sq.col = pathPairs[i].second;
-                animationPath.push_back(sq);
-            }
-
-            // Start animating the first segment of the AI move.
-            if (animationPath.size() >= 2)
-            {
-                startMoveAnimation(movingPiece,
-                                   animationPath[0].row, animationPath[0].col,
-                                   animationPath[1].row, animationPath[1].col);
-            }
-            else
-            {
-                // Fallback for simple moves or missing path data.
-                startMoveAnimation(movingPiece,
-                                   from.row, from.col,
-                                   to.row, to.col);
-            }
         }
         else
         {
@@ -345,7 +297,8 @@ void GameController::updateAnimation()
                        animationPath[fromIndex].row,
                        animationPath[fromIndex].col,
                        animationPath[toIndex].row,
-                       animationPath[toIndex].col);
+                       animationPath[toIndex].col,
+                       animation.isUndo);
 
     // Advance to the next segment for the following update.
     animationPathIndex++;

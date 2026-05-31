@@ -30,6 +30,7 @@ struct MoveAnimation
 
     Uint32 startTime = 0;
     Uint32 durationMs = 2000;
+    bool isUndo = false;
 };
 
 // Represents a single move in the game history
@@ -79,7 +80,10 @@ public:
     GameController();
 
     // Starts a visual movement animation for a checker
-    void startMoveAnimation(char piece, int fromRow, int fromCol, int toRow, int toCol);
+    void startMoveAnimation(char piece, int fromRow, int fromCol, int toRow, int toCol, bool isUndo = false);
+
+    // Sets up a full multi-segment path animation from a MoveRecord
+    void setupPathAnimation(board &b, char piece, int fR, int fC, int tR, int tC, bool isUndo = false);
 
     // Returns all legal moves for the selected piece
     std::vector<Square> getLegalMovesForSelection(board &b, int row, int col);
