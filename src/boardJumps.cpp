@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cctype>
 #include <list>
+#include <memory>
 
 using std::list;
 
@@ -41,20 +42,20 @@ int board::reverse(int i)
 // instead the character is passed
 // recursively call jumpAvailable, using the new end position
 // keep track of what piece is currently making the jumps by passing it as parameter
-void board::createJump(list<jump *> &jlist, char c, int xs, int ys, int xj, int yj, int xe, int ye, jump *jp)
+void board::createJump(list<std::shared_ptr<jump>> &jlist, char c, int xs, int ys, int xj, int yj, int xe, int ye, std::shared_ptr<jump> jp)
 {
 	arr[xs][ys] = 'e';
 	//+1 to each because 0 will mess up the keys and reverse for an edge case such as xs=0 ys =0
 	int key = createkey(xs + 1, ys + 1, xj + 1, yj + 1, xe + 1, ye + 1);
-	jump *jcheck = jp;
-	while (jcheck != NULL)
+	std::shared_ptr<jump> jcheck = jp;
+	while (jcheck != nullptr)
 	{
 		if (key == jcheck->key || key == reverse(jcheck->key))
 			return;
 		jcheck = jcheck->prev;
 	}
-	jump *j = new jump(c, arr[xj][yj], xs, ys, xj, yj, xe, ye, jp, key);
-	if (jp != NULL)
+	auto j = std::make_shared<jump>(c, arr[xj][yj], xs, ys, xj, yj, xe, ye, jp, key);
+	if (jp != nullptr)
 		jp->noNext = false;
 	jlist.push_front(j);
 	jumpAvailable(jlist, c, xe, ye, j);
@@ -68,21 +69,19 @@ void board::createJump(list<jump *> &jlist, char c, int xs, int ys, int xj, int 
 // add the start point to the move's start position
 // undoes each jump, so the starting character is where it began before getting erased
 // replaces the 'e's with original characters
-void board::createJumpMove(list<jump *> &jlist)
+void board::createJumpMove(list<std::shared_ptr<jump>> &jlist)
 {
 	if (!jlist.empty())
 	{
-		list<jump *>::const_iterator it = jlist.begin();
-		for (; it != jlist.end(); ++it)
+		for (auto it = jlist.begin(); it != jlist.end(); ++it)
 		{
 			if ((*it)->noNext)
 			{
-				move *m = new move((*it)->jumpingPiece, -1, -1, -1, -1);
-				jump *jp = (*it);
-				while (jp != NULL)
+				auto m = std::make_unique<move>((*it)->jumpingPiece, -1, -1, -1, -1);
+				std::shared_ptr<jump> jp = (*it);
+				while (jp != nullptr)
 				{
 					m->jpoints.push_front(jp);
-					++jp->numTimes;
 					jp = jp->prev;
 				}
 				m->xi = m->jpoints.front()->xs;
@@ -90,19 +89,19 @@ void board::createJumpMove(list<jump *> &jlist)
 
 				addPathPoint(m, m->jpoints.front()->xs, m->jpoints.front()->ys);
 
-				for (list<jump *>::iterator it = m->jpoints.begin(); it != m->jpoints.end(); ++it)
+				for (auto it_j = m->jpoints.begin(); it_j != m->jpoints.end(); ++it_j)
 				{
-					addPathPoint(m, (*it)->xend, (*it)->yend);
+					addPathPoint(m, (*it_j)->xend, (*it_j)->yend);
 
-					if ((*it)->noNext)
+					if ((*it_j)->noNext)
 					{
-						m->xf = (*it)->xend;
-						m->yf = (*it)->yend;
+						m->xf = (*it_j)->xend;
+						m->yf = (*it_j)->yend;
 					}
 				}
 
-				mlist.push_back(m);
 				undoMove(m);
+				mlist.push_back(std::move(m));
 			}
 		}
 	}
@@ -110,7 +109,7 @@ void board::createJumpMove(list<jump *> &jlist)
 
 // checking for jumping in all four directions
 //(x,y) is the start point
-void board::jumpAvailable(list<jump *> &jlist, char c, int x, int y, jump *jp = NULL)
+void board::jumpAvailable(list<std::shared_ptr<jump>> &jlist, char c, int x, int y, std::shared_ptr<jump> jp)
 {
 	if (tolower(c) == 'b' || c == 'R')
 	{
@@ -155,19 +154,15 @@ void board::jumpAvailable(list<jump *> &jlist, char c, int x, int y, jump *jp = 
 // then create jumping moves once the search is finished
 bool board::jumpsAvailable()
 {
-	while (!mlist.empty())
-	{
-		delete mlist.front();
-		mlist.pop_front();
-	}
+	mlist.clear();
 	for (int i = 0; i != 8; ++i)
 	{
 		for (int j = 0; j != 4; ++j)
 		{
 			if (arr[i][j] == color || arr[i][j] == toupper(color))
 			{
-				list<jump *> jlist;
-				jumpAvailable(jlist, arr[i][j], i, j, NULL);
+				list<std::shared_ptr<jump>> jlist;
+				jumpAvailable(jlist, arr[i][j], i, j, nullptr);
 				createJumpMove(jlist);
 			}
 		}

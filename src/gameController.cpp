@@ -28,7 +28,7 @@ void GameController::startMoveAnimation(char piece, int fromRow, int fromCol, in
     animation.toCol = toCol;
     animation.isUndo = isUndo;
     animation.startTime = SDL_GetTicks();
-    animation.durationMs = 500;
+    animation.durationMs = 300;
 }
 
 void GameController::setupPathAnimation(board &b, char piece, int fR, int fC, int tR, int tC, bool isUndo)

@@ -42,12 +42,11 @@ using std::tolower;
 // After the move is applied, handleKinging() promotes the piece if it reached
 // the opponent's back row, and changeTurn() advances the game to the next
 // player.
-void board::makeMove(move *m)
+void board::makeMove(const std::unique_ptr<move> &m)
 {
 	if (!m->jpoints.empty())
 	{
-		list<jump *>::iterator it = m->jpoints.begin();
-		for (; it != m->jpoints.end(); ++it)
+		for (auto it = m->jpoints.begin(); it != m->jpoints.end(); ++it)
 			arr[(*it)->x][(*it)->y] = 'e';
 	}
 
@@ -71,11 +70,11 @@ void board::makeMove(move *m)
 // For jump moves, each captured piece is restored from the saved jump data. The
 // moving piece is then placed back on its original square using m->mP, which
 // stores the piece as it existed before the move was made.
-void board::undoMove(move *m)
+void board::undoMove(const std::unique_ptr<move> &m)
 {
 	if (!m->jpoints.empty())
 	{
-		for (list<jump *>::iterator it = m->jpoints.begin(); it != m->jpoints.end(); ++it)
+		for (auto it = m->jpoints.begin(); it != m->jpoints.end(); ++it)
 		{
 			arr[(*it)->xs][(*it)->ys] = 'e';
 			arr[(*it)->x][(*it)->y] = (*it)->c;
@@ -164,6 +163,12 @@ int board::cornerDiagonal(char losing, char winning)
 // The large multipliers make material dominate the smaller positional terms.
 int board::evaluate()
 {
+	// Weighted layers for board evaluation.
+	constexpr int MATERIAL_WEIGHT    = 100000000;
+	constexpr int ADVANCEMENT_WEIGHT = 1000000;
+	constexpr int COUNT_WEIGHT       = 10000;
+	constexpr int CORNER_WEIGHT      = 100;
+
 	int a1 = 0, a2 = 0, b = 0, c = 0, d = 0;
 
 	for (int i = 0; i != 8; ++i)
@@ -213,11 +218,11 @@ int board::evaluate()
 		d += cornerDiagonal('b', 'r');
 
 	// Weight the score components by importance.
-	a1 *= 100000000;
-	a2 *= 100000000;
-	b *= 1000000;
-	c *= 10000;
-	d *= 100;
+	a1 *= MATERIAL_WEIGHT;
+	a2 *= MATERIAL_WEIGHT;
+	b  *= ADVANCEMENT_WEIGHT;
+	c  *= COUNT_WEIGHT;
+	d  *= CORNER_WEIGHT;
 
 	// Modern C++ random number generation for consistent cross-platform behavior.
 	static std::mt19937 gen(std::random_device{}());
@@ -243,7 +248,7 @@ void board::startup()
 // x and y are compact 8 x 4 board coordinates. The path stored in the move is
 // converted to expanded 8 x 8 coordinates so the SDL layer can animate pieces
 // without knowing about the board's compressed internal representation.
-void board::addPathPoint(move *m, int x, int y)
+void board::addPathPoint(const std::unique_ptr<move> &m, int x, int y)
 {
 	m->path8x8.push_back({x, toExpandedCol(x, y)});
 }
@@ -263,25 +268,15 @@ std::vector<std::pair<int, int>> board::getLegalDestinationsForSquare(int row, i
 	if (terminalTest())
 		return result;
 
-	for (std::list<move *>::iterator it = mlist.begin(); it != mlist.end(); ++it)
+	for (const auto &m : mlist)
 	{
-		move *m = *it;
-
 		// Convert the compact starting column to an expanded 8 x 8 column.
-		int start_col;
-		if (m->xi % 2 == 0)
-			start_col = 2 * m->yi + 1;
-		else
-			start_col = 2 * m->yi;
+		int start_col = toExpandedCol(m->xi, m->yi);
 
 		if (m->xi == row && start_col == col)
 		{
 			// Convert the compact destination column to an expanded 8 x 8 column.
-			int end_col;
-			if (m->xf % 2 == 0)
-				end_col = 2 * m->yf + 1;
-			else
-				end_col = 2 * m->yf;
+			int end_col = toExpandedCol(m->xf, m->yf);
 
 			result.push_back(std::make_pair(m->xf, end_col));
 		}
@@ -318,10 +313,8 @@ bool board::tryMove8x8(int fromRow, int fromCol, int toRow, int toCol)
 		return false;
 	}
 
-	for (std::list<move *>::iterator it = mlist.begin(); it != mlist.end(); ++it)
+	for (const auto &m : mlist)
 	{
-		move *m = *it;
-
 		int start_col = toExpandedCol(m->xi, m->yi);
 		int end_col = toExpandedCol(m->xf, m->yf);
 
@@ -368,7 +361,7 @@ std::vector<std::pair<int, int>> board::getMovePath8x8(int fromRow, int fromCol,
 		return path;
 	}
 
-	for (move *m : mlist)
+	for (const auto &m : mlist)
 	{
 		int startCol = toExpandedCol(m->xi, m->yi);
 		int endCol = toExpandedCol(m->xf, m->yf);
@@ -416,7 +409,7 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 	// If there is only one legal move, there is no reason to run alpha-beta.
 	if (mlist.size() == 1)
 	{
-		move *m = mlist.front();
+		move *m = mlist.front().get();
 		fromRow = m->xi;
 		fromCol = toExpandedCol(m->xi, m->yi);
 		toRow = m->xf;
@@ -424,8 +417,11 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 		return true;
 	}
 
-	move *bestM = NULL;     // Best move from the last fully completed depth.
-	move *tempBestM = NULL; // Best move found during the current depth.
+	move *tempBestM = nullptr; // Best move found during the current depth.
+
+	// Coordinates of the best move found in the last completed depth iteration.
+	// We store coordinates because mlist is cleared at the start of each depth.
+	int bestFR = -1, bestFC = -1, bestTR = -1, bestTC = -1;
 
 	int maxdepth = 0;
 	int cdepth = 0;
@@ -463,10 +459,10 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 		if (depth == 0)
 			return b.evaluate();
 
-		std::list<move *>::iterator iter = b.mlist.begin();
-
 		int localalpha = std::numeric_limits<int>::min();
 		int localbeta = std::numeric_limits<int>::max();
+
+		auto iter = b.mlist.begin();
 
 		// Black is the maximizing side.
 		if (b.getTurn() == 'b')
@@ -496,7 +492,7 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 
 					// Only the root depth records the actual move to return.
 					if (depth == maxdepth)
-						tempBestM = *iter;
+						tempBestM = (*iter).get();
 				}
 
 				// Alpha-beta cutoff.
@@ -537,7 +533,7 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 
 					// Only the root depth records the actual move to return.
 					if (depth == maxdepth)
-						tempBestM = *iter;
+						tempBestM = (*iter).get();
 				}
 
 				// Alpha-beta cutoff.
@@ -577,8 +573,13 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 
 		if (timeUp)
 			break;
-		else
-			bestM = tempBestM;
+		else if (tempBestM != nullptr)
+		{
+			bestFR = tempBestM->xi;
+			bestFC = toExpandedCol(tempBestM->xi, tempBestM->yi);
+			bestTR = tempBestM->xf;
+			bestTC = toExpandedCol(tempBestM->xf, tempBestM->yf);
+		}
 
 		if (reachedEnd)
 			break;
@@ -586,18 +587,24 @@ bool board::findBestMove8x8(int timeLimit, int &fromRow, int &fromCol, int &toRo
 
 	// Fallback: if the search was interrupted before recording a best move,
 	// return the first legal move so the AI still plays something valid.
-	if (bestM == NULL && !mlist.empty())
-		bestM = mlist.front();
+	if (bestFR == -1 && !mlist.empty())
+	{
+		move *fallback = mlist.front().get();
+		fromRow = fallback->xi;
+		fromCol = toExpandedCol(fallback->xi, fallback->yi);
+		toRow = fallback->xf;
+		toCol = toExpandedCol(fallback->xf, fallback->yf);
+		return true;
+	}
 
-	if (bestM == NULL)
-		return false;
+	if (bestFR != -1)
+	{
+		fromRow = bestFR;
+		fromCol = bestFC;
+		toRow = bestTR;
+		toCol = bestTC;
+		return true;
+	}
 
-	// Convert the selected internal move back into expanded 8 x 8 GUI
-	// coordinates for the caller.
-	fromRow = bestM->xi;
-	fromCol = toExpandedCol(bestM->xi, bestM->yi);
-	toRow = bestM->xf;
-	toCol = toExpandedCol(bestM->xf, bestM->yf);
-
-	return true;
+	return false;
 }

@@ -9,6 +9,7 @@
 #include <cctype>
 #include <iostream>
 #include <list>
+#include <memory>
 
 using std::cout;
 using std::endl;
@@ -64,11 +65,10 @@ void board::createMove(const int &xi, const int &yi, int xf, int yf)
 {
 	if (isValidPos(xf, yf) && arr[xf][yf] == 'e')
 	{
-		move *m = new move(arr[xi][yi], xi, yi, xf, yf);
-		mlist.push_back(m);
-
+		auto m = std::make_unique<move>(arr[xi][yi], xi, yi, xf, yf);
 		addPathPoint(m, xi, yi);
 		addPathPoint(m, xf, yf);
+		mlist.push_back(std::move(m));
 	}
 }
 
@@ -77,11 +77,7 @@ void board::createMove(const int &xi, const int &yi, int xf, int yf)
 // called only if jumpsAvailable returns false
 bool board::listMoves()
 {
-	while (!mlist.empty())
-	{
-		delete mlist.front();
-		mlist.pop_front();
-	}
+	mlist.clear();
 
 	// iterate through the matrix
 	// check neighboring positions

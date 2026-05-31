@@ -19,6 +19,7 @@
 #include <iostream>
 #include <list>
 #include <string>
+#include <memory>
 #include <vector>
 
 // A simple row/column coordinate used by the GUI-facing move path code.
@@ -34,7 +35,7 @@ class jump
 {
 	// Previous jump in a multi-jump chain.
 	// This lets the engine reconstruct full jump sequences recursively.
-	jump *prev;
+	std::shared_ptr<jump> prev;
 
 	// The checker that is performing this jump.
 	// Lowercase pieces are normal checkers; uppercase pieces are kings.
@@ -43,14 +44,6 @@ class jump
 	// True when this jump node currently has no continuation jumps.
 	// The jump-generation code uses this while building multi-jump paths.
 	bool noNext;
-
-	// Reference count for shared jump objects.
-	//
-	// A single jump node may be reused by more than one generated move when
-	// jump paths branch. move::~move() decrements this count and only deletes
-	// the jump when no remaining move references it.
-	int numTimes;
-
 	// The piece that was jumped over.
 	// This is stored so undoMove() can restore captured pieces during AI search.
 	char c;
@@ -71,6 +64,7 @@ class jump
 	// within one multi-jump sequence.
 	int key;
 
+public:
 	// Creates one jump node.
 	//
 	// jpingp = moving piece
@@ -80,8 +74,8 @@ class jump
 	// xe,ye  = landing square
 	// p      = previous jump in the chain
 	// k      = repeat-detection key
-	jump(char jpingp, char piece, int xs, int ys, int xc, int yc, int xe, int ye, jump *p, int k)
-		: prev(p), jumpingPiece(jpingp), noNext(true), numTimes(0), c(piece), xs(xs), ys(ys),
+	jump(char jpingp, char piece, int xs, int ys, int xc, int yc, int xe, int ye, std::shared_ptr<jump> p, int k)
+		: prev(p), jumpingPiece(jpingp), noNext(true), c(piece), xs(xs), ys(ys),
 		  x(xc), y(yc), xend(xe), yend(ye), key(k) {}
 
 	//---------------------------------------------------------------------------------
@@ -112,7 +106,7 @@ class move
 
 	// Captures that occur as part of this move.
 	// Empty for a normal non-jump move; one or more entries for jumps.
-	std::list<jump *> jpoints;
+	std::list<std::shared_ptr<jump>> jpoints;
 
 	// Expanded 8 x 8 path used by the GUI animation code.
 	// For a multi-jump, this contains the intermediate landing squares so the
@@ -120,15 +114,11 @@ class move
 	// the first square to the final square.
 	std::vector<Square> path8x8;
 
+public:
 	// Creates a move from one compressed board square to another.
 	move(char c, int xs, int ys, int xe, int ye) : mP(c), xi(xs), yi(ys), xf(xe), yf(ye) {}
 
-	// Releases any jump nodes referenced by this move.
-	//
-	// The implementation lives in board.cpp. Because jump nodes may be shared
-	// between generated moves, the destructor uses jump::numTimes to avoid
-	// deleting the same jump twice.
-	~move();
+	~move() = default;
 
 	//---------------------------------------------------------------------------------
 	// friend classes:
@@ -163,8 +153,8 @@ public:
 	// Creates a new board in the standard starting position.
 	board();
 
-	// Deletes all generated moves currently stored in mlist.
-	~board();
+	// Moves are automatically deleted by unique_ptr.
+	~board() = default;
 
 	// Copies the board position and side-to-move, but intentionally does not copy
 	// the move list. AI search creates many temporary board positions, and each
@@ -180,7 +170,7 @@ public:
 
 	// Exposes the current move list to code that still needs direct move access.
 	// Prefer the 8 x 8 helper functions below for GUI-facing code when possible.
-	std::list<move *> &getMoveList();
+	std::list<std::unique_ptr<move>> &getMoveList();
 
 	// Converts an internal compressed column index to a visible 8 x 8 column.
 	//
@@ -291,9 +281,9 @@ private:
 
 	int createkey(int, int, int, int, int, int);
 	int reverse(int);
-	void createJump(std::list<jump *> &, char, int, int, int, int, int, int, jump *);
-	void createJumpMove(std::list<jump *> &);
-	void jumpAvailable(std::list<jump *> &, char c, int, int, jump *);
+	void createJump(std::list<std::shared_ptr<jump>> &, char, int, int, int, int, int, int, std::shared_ptr<jump>);
+	void createJumpMove(std::list<std::shared_ptr<jump>> &);
+	void jumpAvailable(std::list<std::shared_ptr<jump>> &, char c, int, int, std::shared_ptr<jump>);
 	bool jumpsAvailable();
 	bool jumpConditions(int, int, int, int);
 
@@ -310,7 +300,7 @@ private:
 	//---------------------------------------------------------------------------------
 
 	// Adds one expanded 8 x 8 point to a move's animation path.
-	void addPathPoint(move *m, int x, int y);
+	void addPathPoint(const std::unique_ptr<move> &m, int x, int y);
 
 	//-------------------------------------------------------------------------------------
 	// AI/search state and move list
@@ -323,7 +313,7 @@ private:
 	//
 	// This list is regenerated frequently by terminalTest()/movesAvailable().
 	// The board object owns these move pointers and deletes them in the destructor.
-	std::list<move *> mlist;
+	std::list<std::unique_ptr<move>> mlist;
 
 	//---------------------------------------------------------------------------------
 	// Engine functions implemented in boardPublic.cpp
@@ -331,14 +321,14 @@ private:
 
 	// Applies a move to the board, removes captured pieces, handles kinging, and
 	// changes the side to move.
-	void makeMove(move *);
+	void makeMove(const std::unique_ptr<move> &m);
 
 	// Reverses a move after AI search simulation.
 	//
 	// This restores captured pieces and returns the moving piece to its original
 	// square. Search code calls changeTurn() separately after undoing because
 	// makeMove() already changed the turn when the simulated move was applied.
-	void undoMove(move *);
+	void undoMove(const std::unique_ptr<move> &m);
 
 	// Endgame heuristic helper used by evaluate().
 	//

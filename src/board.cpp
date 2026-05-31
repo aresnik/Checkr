@@ -18,42 +18,13 @@
 #include "board.h"
 #include <cctype>
 #include <list>
+#include <memory>
 
 using std::list;
 
 // Default AI thinking time, in seconds.
 // This is a static board member, so it is shared across board instances.
 int board::timeLimit = 30;
-
-/*
- * move destructor
- *
- * A move can contain one or more jump pointers in jpoints. Some jump objects
- * may be shared by multiple generated moves when the jump tree branches.
- *
- * Example:
- *
- *          1
- *       2
- *    3     3'
- *       4
- *
- * In a branching multi-jump search, the same early jump can be reused by
- * more than one final move path. To prevent deleting the same jump object
- * twice, each jump tracks how many move lists reference it through numTimes.
- *
- * This destructor decrements each jump's reference count and deletes the jump
- * only when no remaining move refers to it.
- */
-move::~move()
-{
-	for (list<jump *>::iterator it = jpoints.begin(); it != jpoints.end(); ++it)
-	{
-		--(*it)->numTimes;
-		if ((*it)->numTimes == 0)
-			delete (*it);
-	}
-}
 
 /*
  * board constructor
@@ -63,21 +34,6 @@ move::~move()
 board::board()
 {
 	reset();
-}
-
-/*
- * board destructor
- *
- * The board owns the move pointers stored in mlist, so it must delete them
- * before the board object is destroyed.
- */
-board::~board()
-{
-	while (!mlist.empty())
-	{
-		delete mlist.front();
-		mlist.pop_front();
-	}
 }
 
 /*
@@ -170,7 +126,7 @@ char board::getTurnPublic() const
  * been refreshed, typically by calling generateLegalMoves() or by using an
  * engine function that calls terminalTest().
  */
-std::list<move *> &board::getMoveList()
+std::list<std::unique_ptr<move>> &board::getMoveList()
 {
 	return mlist;
 }
