@@ -27,7 +27,7 @@ void GameController::startMoveAnimation(char piece, int fromRow, int fromCol, in
     animation.toRow = toRow;
     animation.toCol = toCol;
     animation.startTime = SDL_GetTicks();
-    animation.durationMs = 300;
+    animation.durationMs = 500;
 }
 
 // Converts the board's legal destination list into Square objects for the UI.
@@ -52,7 +52,7 @@ std::vector<Square> GameController::getLegalMovesForSelection(board &b, int row,
 }
 
 // Handles a mouse click on the board.
-void GameController::handleClick(board &b, int row, int col)
+void GameController::handleClick(board &b, int row, int col, std::vector<MoveRecord> &history, int &historyIndex)
 {
     // Ignore input while an animation is running, while AI is thinking,
     // or when it is the black AI player's turn.
@@ -103,11 +103,38 @@ void GameController::handleClick(board &b, int row, int col)
             std::vector<std::pair<int, int>> pathPairs =
                 b.getMovePath8x8(selectedRow, selectedCol, row, col);
 
+            // Identify captured pieces before applying the move to the board
+            pendingCaptures.clear();
+            if (pathPairs.size() >= 2)
+            {
+                for (size_t i = 0; i < pathPairs.size() - 1; ++i)
+                {
+                    int r1 = pathPairs[i].first, c1 = pathPairs[i].second;
+                    int r2 = pathPairs[i+1].first, c2 = pathPairs[i+1].second;
+
+                    // If the distance is 2 squares, it's a jump.
+                    if (std::abs(r1 - r2) > 1)
+                    {
+                        int capR = (r1 + r2) / 2;
+                        int capC = (c1 + c2) / 2;
+                        pendingCaptures.push_back({capR, capC, b.getPieceAt8x8(capR, capC), (int)i + 1});
+                    }
+                }
+            }
+
             // Ask the board engine to apply the move.
             bool moved = b.tryMove8x8(selectedRow, selectedCol, row, col);
 
             if (moved)
             {
+                // If we are making a new move while having undid previous ones,
+                // clear the "future" history (VS Code style).
+                if (historyIndex < (int)history.size())
+                    history.erase(history.begin() + historyIndex, history.end());
+
+                history.push_back({selectedRow, selectedCol, row, col});
+                historyIndex++;
+
                 std::cout << "Moved from (" << selectedRow << ", " << selectedCol
                           << ") to (" << row << ", " << col << ")\n";
 
@@ -158,14 +185,18 @@ void GameController::handleClick(board &b, int row, int col)
                 // Copy the board so the AI thread does not directly mutate the live board.
                 board boardCopy = b;
 
-                std::thread([boardCopy, this]() mutable
-                            {
+                // Join the previous thread if it finished but wasn't cleaned up
+                if (aiThread.joinable())
+                    aiThread.join();
+
+                aiThread = std::thread([boardCopy, this]() mutable
+                                       {
                     int fr, fc, tr, tc;
 
                     // Search for the AI's best move at specified depth
                     bool found = boardCopy.findBestMove8x8(3, fr, fc, tr, tc);
 
-                    if (found)
+                    if (found && aiThinking)
                     {
                         // Store the chosen AI move safely because this runs on another thread.
                         std::lock_guard<std::mutex> lock(aiMutex);
@@ -175,8 +206,7 @@ void GameController::handleClick(board &b, int row, int col)
                     }
 
                     // Mark the AI as done thinking.
-                    aiThinking = false; })
-                    .detach();
+                    aiThinking = false; });
             }
         }
     }
@@ -195,7 +225,7 @@ bool GameController::isCurrentPlayersPiece(const board &b, int row, int col) con
 }
 
 // Applies the AI's completed move to the live board once the background thread has found it.
-void GameController::updateAI(board &b)
+void GameController::updateAI(board &b, std::vector<MoveRecord> &history, int &historyIndex)
 {
     // Only apply the AI move once it is ready and no animation is currently active.
     if (aiMoveReady && !animation.active)
@@ -218,11 +248,36 @@ void GameController::updateAI(board &b)
         std::vector<std::pair<int, int>> pathPairs =
             b.getMovePath8x8(from.row, from.col, to.row, to.col);
 
+        // Identify captured pieces before the AI applies the move
+        pendingCaptures.clear();
+        if (pathPairs.size() >= 2)
+        {
+            for (size_t i = 0; i < pathPairs.size() - 1; ++i)
+            {
+                int r1 = pathPairs[i].first, c1 = pathPairs[i].second;
+                int r2 = pathPairs[i+1].first, c2 = pathPairs[i+1].second;
+
+                if (std::abs(r1 - r2) > 1)
+                {
+                    int capR = (r1 + r2) / 2;
+                    int capC = (c1 + c2) / 2;
+                    pendingCaptures.push_back({capR, capC, b.getPieceAt8x8(capR, capC), (int)i + 1});
+                }
+            }
+        }
+
         // Apply the AI move to the actual live board.
         bool aiApplied = b.tryMove8x8(from.row, from.col, to.row, to.col);
 
         if (aiApplied)
         {
+            // Record AI move in history
+            if (historyIndex < (int)history.size())
+                history.erase(history.begin() + historyIndex, history.end());
+
+            history.push_back({from.row, from.col, to.row, to.col});
+            historyIndex++;
+
             std::cout << "AI moved from (" << from.row << ", " << from.col
                       << ") to (" << to.row << ", " << to.col << ")\n";
 
@@ -275,6 +330,7 @@ void GameController::updateAnimation()
     if (animationPathIndex >= static_cast<int>(animationPath.size()) - 1)
     {
         animationPath.clear();
+        pendingCaptures.clear();
         animationPathIndex = 0;
         return;
     }
@@ -293,4 +349,11 @@ void GameController::updateAnimation()
 
     // Advance to the next segment for the following update.
     animationPathIndex++;
+}
+
+void GameController::stopAI()
+{
+    aiThinking = false;
+    if (aiThread.joinable())
+        aiThread.join();
 }

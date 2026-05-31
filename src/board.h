@@ -222,16 +222,6 @@ public:
 	// Initializes or resets the board for a new game.
 	void startup();
 
-private:
-	// Switches the current side to move after a move is applied.
-	void changeTurn()
-	{
-		if (color == 'r')
-			color = 'b';
-		else
-			color = 'r';
-	}
-
 	// Returns true when the current player has no legal moves.
 	//
 	// This also regenerates mlist through movesAvailable(), so callers should be
@@ -241,6 +231,16 @@ private:
 		if (!movesAvailable())
 			return true;
 		return false;
+	}
+
+private:
+	// Switches the current side to move after a move is applied.
+	void changeTurn()
+	{
+		if (color == 'r')
+			color = 'b';
+		else
+			color = 'r';
 	}
 
 	//---------------------------------------------------------------------------------

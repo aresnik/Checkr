@@ -10,6 +10,7 @@
 #include <SDL3/SDL.h>
 #include <vector>
 #include <atomic>
+#include <thread>
 #include <mutex>
 #include "board.h"
 
@@ -29,6 +30,21 @@ struct MoveAnimation
 
     Uint32 startTime = 0;
     Uint32 durationMs = 2000;
+};
+
+// Represents a single move in the game history
+struct MoveRecord
+{
+    int fromRow, fromCol;
+    int toRow, toCol;
+};
+
+// Stores info about a captured piece that should stay visible until "jumped"
+struct PendingCapture
+{
+    int row, col;
+    char piece;
+    int captureStep; // The path index that triggers visual removal
 };
 
 // Handles user input, animations, and AI coordination
@@ -56,6 +72,9 @@ public:
     Square aiFrom;
     Square aiTo;
 
+    // Handle to the background AI thread
+    std::thread aiThread;
+
     // Constructor
     GameController();
 
@@ -66,22 +85,28 @@ public:
     std::vector<Square> getLegalMovesForSelection(board &b, int row, int col);
 
     // Handles mouse clicks and move selection logic
-    void handleClick(board &b, int row, int col);
+    void handleClick(board &b, int row, int col, std::vector<MoveRecord> &history, int &historyIndex);
 
     // Checks if a selected piece belongs to the current player
     bool isCurrentPlayersPiece(const board &b, int row, int col) const;
 
     // Updates AI state and applies completed AI moves
-    void updateAI(board &b);
+    void updateAI(board &b, std::vector<MoveRecord> &history, int &historyIndex);
 
     // Path of squares used for multi-jump animations
     std::vector<Square> animationPath;
+
+    // List of pieces currently being "jumped" in the active animation
+    std::vector<PendingCapture> pendingCaptures;
 
     // Current position within the animation path
     int animationPathIndex = 0;
 
     // Updates animation progress each frame
     void updateAnimation();
+
+    // Ensures the AI thread is safely shut down
+    void stopAI();
 };
 
 #endif

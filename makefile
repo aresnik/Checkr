@@ -1,6 +1,6 @@
 CXX = clang++
 CXXFLAGS = -std=c++17 -Wall -I/opt/homebrew/include
-LDFLAGS = -L/opt/homebrew/lib -lSDL3 -lSDL3_image
+LDFLAGS = -L/opt/homebrew/lib -lSDL3 -lSDL3_image -lSDL3_ttf
 
 TARGET = bin/checkers
 

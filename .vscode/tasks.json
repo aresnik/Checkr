@@ -23,7 +23,6 @@
                 "-fcolor-diagnostics",
                 "-fansi-escape-codes",
                 "-g",
-                "-I${workspaceFolder}/../IceCream/src",
                 "${file}",
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}"

@@ -12,7 +12,9 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3_image/SDL_image.h>
+#include <SDL3_ttf/SDL_ttf.h>
 #include <iostream>
+#include <string>
 #include <vector>
 #include "board.h"
 #include "gameController.h"
@@ -22,6 +24,8 @@ struct AppState
     SDL_Window *window = nullptr;
     SDL_Renderer *renderer = nullptr;
 
+    std::string basePath;
+
     // Dynamic layout variables calculated every frame
     float screenW = 0;
     float screenH = 0;
@@ -30,6 +34,7 @@ struct AppState
     float boardYOffset = 0;
 
     // Textures for smooth rendering
+    TTF_Font *font = nullptr;
     SDL_Texture *boardTexture = nullptr;
     SDL_Texture *redTexture = nullptr;
     SDL_Texture *blackTexture = nullptr;
@@ -40,9 +45,99 @@ struct AppState
     SDL_Texture *newGamePressedTexture = nullptr;
     bool newGamePressed = false;
 
+    SDL_FRect newGameRect;
+    SDL_FRect undoRect;
+    SDL_FRect redoRect;
+
+    SDL_Texture *undoTexture = nullptr;
+    SDL_Texture *undoPressedTexture = nullptr;
+    bool undoPressed = false;
+
+    SDL_Texture *redoTexture = nullptr;
+    SDL_Texture *redoPressedTexture = nullptr;
+    bool redoPressed = false;
+
+    // Game over textures and state
+    SDL_Texture *youWinTexture = nullptr;
+    SDL_Texture *aiWinTexture = nullptr;
+    int winner = 0; // 0: none, 1: Player (Red), 2: AI (Black)
+
+    std::vector<MoveRecord> history;
+    int historyIndex = 0;
+
     board b;
     GameController controller;
 };
+
+// Helper to resolve absolute asset paths, critical for iOS sandboxing.
+std::string getAssetPath(const std::string &relativePath, AppState *state)
+{
+    if (state->basePath.empty())
+    {
+        const char *base = SDL_GetBasePath();
+        if (base)
+        {
+            std::string baseStr = base;
+            SDL_Log("Internal: SDL_GetBasePath reported: %s", baseStr.c_str());
+            // In SDL3, the pointer returned by SDL_GetBasePath is internally managed.
+            // Do NOT call SDL_free on it, as it will cause a crash during SDL_Quit.
+
+            // Check if the asset exists at the executable's path.
+            // If not found, check the parent directory (common for bin/ or build/ folders).
+            std::string testPath = baseStr + relativePath;
+            SDL_IOStream *io = SDL_IOFromFile(testPath.c_str(), "rb");
+            if (!io)
+            {
+                // Remove trailing slash and find the previous directory separator
+                if (baseStr.length() > 1)
+                {
+                    size_t last = baseStr.find_last_of("\\/", baseStr.length() - 2);
+                    if (last != std::string::npos)
+                    {
+                        std::string parentStr = baseStr.substr(0, last + 1);
+                        SDL_IOStream *ioParent = SDL_IOFromFile((parentStr + relativePath).c_str(), "rb");
+                        if (ioParent)
+                        {
+                            baseStr = parentStr;
+                            SDL_CloseIO(ioParent);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                SDL_CloseIO(io);
+            }
+            state->basePath = baseStr;
+        }
+    }
+    return state->basePath + relativePath;
+}
+
+// Helper to render a string into a texture using SDL_ttf
+SDL_Texture *createTextureFromText(SDL_Renderer *renderer, TTF_Font *font, const char *text, SDL_Color color)
+{
+    if (!font || !text || text[0] == '\0')
+        return nullptr;
+
+    // Render the text to a high-quality surface
+    SDL_Surface *surface = TTF_RenderText_Blended(font, text, 0, color);
+    if (!surface)
+        return nullptr;
+
+    // Convert surface to GPU texture
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+
+    if (texture)
+    {
+        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+        // Enable linear scaling so text looks smooth when resized
+        SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
+    }
+
+    SDL_DestroySurface(surface);
+    return texture;
+}
 
 // Helper to create the board background as a single texture.
 SDL_Texture *createBoardTexture(SDL_Renderer *renderer, int size)
@@ -69,6 +164,7 @@ SDL_Texture *createBoardTexture(SDL_Renderer *renderer, int size)
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
     if (texture)
     {
+        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
         SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
     }
     SDL_DestroySurface(surface);
@@ -87,8 +183,21 @@ SDL_Texture *createRectTexture(SDL_Renderer *renderer, int w, int h, Uint8 r, Ui
     SDL_FillSurfaceRect(surface, NULL, color);
 
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    if (texture)
+        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
     SDL_DestroySurface(surface);
     return texture;
+}
+
+// Replays the move history from the beginning up to the current historyIndex.
+void replayHistory(AppState *state)
+{
+    state->b.startup();
+    for (int i = 0; i < state->historyIndex; ++i)
+    {
+        const auto &m = state->history[i];
+        state->b.tryMove8x8(m.fromRow, m.fromCol, m.toRow, m.toCol);
+    }
 }
 
 // Helper to create a smooth, anti-aliased circle texture at startup.
@@ -198,6 +307,15 @@ void drawPieces(SDL_Renderer *renderer, AppState *state)
             drawPiece(renderer, row, col, piece, state);
         }
     }
+
+    // Draw captured pieces that are still "waiting" to be visually removed
+    for (const auto &cap : state->controller.pendingCaptures)
+    {
+        if (state->controller.animationPathIndex <= cap.captureStep)
+        {
+            drawPiece(renderer, cap.row, cap.col, cap.piece, state);
+        }
+    }
 }
 
 void drawSelectedSquare(SDL_Renderer *renderer, AppState *state)
@@ -262,18 +380,49 @@ void drawMoveAnimation(SDL_Renderer *renderer, AppState *state)
 void drawNewGameButton(SDL_Renderer *renderer, AppState *state)
 {
     SDL_Texture *texToDraw = state->newGamePressed ? state->newGamePressedTexture : state->newGameTexture;
-    
-    if (!texToDraw) return;
 
-    // Place the button below the board, centered horizontally
-    float btnW = state->tileSize * 1.0f;
-    float btnH = state->tileSize * 1.0f;
-    float btnX = state->boardXOffset + (state->tileSize * 8.0f - btnW) / 2.0f;
-    // Offset it slightly below the bottom edge of the board
-    float btnY = state->boardYOffset + (state->tileSize * 8.0f) + (state->tileSize * 0.5f);
+    if (!texToDraw)
+        return;
 
-    SDL_FRect dst = {btnX, btnY, btnW, btnH};
-    SDL_RenderTexture(renderer, texToDraw, NULL, &dst);
+    SDL_RenderTexture(renderer, texToDraw, NULL, &state->newGameRect);
+}
+
+void drawUndoButton(SDL_Renderer *renderer, AppState *state)
+{
+    SDL_Texture *texToDraw = state->undoPressed ? state->undoPressedTexture : state->undoTexture;
+    if (!texToDraw)
+        return;
+
+    SDL_RenderTexture(renderer, texToDraw, NULL, &state->undoRect);
+}
+
+void drawRedoButton(SDL_Renderer *renderer, AppState *state)
+{
+    SDL_Texture *texToDraw = state->redoPressed ? state->redoPressedTexture : state->redoTexture;
+    if (!texToDraw)
+        return;
+
+    SDL_RenderTexture(renderer, texToDraw, NULL, &state->redoRect);
+}
+
+void drawGameOverMessage(SDL_Renderer *renderer, AppState *state)
+{
+    if (state->winner == 0)
+        return;
+
+    SDL_Texture *tex = (state->winner == 1) ? state->youWinTexture : state->aiWinTexture;
+    if (!tex)
+        return;
+
+    // Position: Centered horizontally, below the New Game button
+    float msgW = state->tileSize * 4.0f;
+    float msgH = state->tileSize * 1.0f;
+    float msgX = state->boardXOffset + (state->tileSize * 8.0f - msgW) / 2.0f;
+    // Position: Just below the row of buttons
+    float msgY = state->newGameRect.y + state->newGameRect.h + (state->tileSize * 0.2f);
+
+    SDL_FRect dst = {msgX, msgY, msgW, msgH};
+    SDL_RenderTexture(renderer, tex, NULL, &dst);
 }
 
 // Draws a simple visual indicator while the AI is calculating its move.
@@ -282,11 +431,16 @@ void drawThinkingIndicator(SDL_Renderer *renderer, AppState *state)
     if (!state->controller.aiThinking)
         return;
 
+    // Enable blending for this draw call so the alpha transparency works
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
     SDL_FRect box;
-    box.x = state->boardXOffset + state->tileSize * 0.2f;
-    box.y = state->boardYOffset + state->tileSize * 0.2f;
     box.w = state->tileSize * 2.0f;
     box.h = state->tileSize * 0.5f;
+    // Center horizontally: (Total Board Width - Box Width) / 2
+    box.x = state->boardXOffset + (state->tileSize * 8.0f - box.w) / 2.0f;
+    // Position above the board: Top of board - height of box - small margin
+    box.y = state->boardYOffset - box.h - (state->tileSize * 0.2f);
 
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
     SDL_RenderFillRect(renderer, &box);
@@ -307,6 +461,9 @@ void drawThinkingIndicator(SDL_Renderer *renderer, AppState *state)
 
         SDL_RenderFillRect(renderer, &dot);
     }
+
+    // Restore default blend mode
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 }
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
@@ -344,25 +501,33 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
+    // Initialize the font library
+    if (!TTF_Init())
+    {
+        SDL_Log("TTF_Init Error: %s", SDL_GetError());
+        return SDL_APP_FAILURE;
+    }
+
     // Set a logical 400x800 coordinate system.
     // SDL will now scale everything and fix mouse coordinates automatically.
     SDL_SetRenderLogicalPresentation(state->renderer, 400, 800, SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
-    // Load PNG texture for the board
-    state->boardTexture = IMG_LoadTexture(state->renderer, "assets/board.png");
+    // Load textures using the absolute asset path
+    std::string boardPath = getAssetPath("assets/board.png", state);
+    state->boardTexture = IMG_LoadTexture(state->renderer, boardPath.c_str());
     if (!state->boardTexture)
     {
-        SDL_Log("Warning: Could not load board.png, using procedural fallback.");
+        SDL_Log("Warning: Could not load board.png from %s. Error: %s", boardPath.c_str(), SDL_GetError());
         state->boardTexture = createBoardTexture(state->renderer, 1024);
     }
     if (state->boardTexture)
         SDL_SetTextureScaleMode(state->boardTexture, SDL_SCALEMODE_LINEAR);
 
     // Load PNG textures for the pieces
-    state->redTexture = IMG_LoadTexture(state->renderer, "assets/red_piece.png");
-    state->blackTexture = IMG_LoadTexture(state->renderer, "assets/black_piece.png");
-    state->redKingTexture = IMG_LoadTexture(state->renderer, "assets/red_king.png");
-    state->blackKingTexture = IMG_LoadTexture(state->renderer, "assets/black_king.png");
+    state->redTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/red_piece.png", state).c_str());
+    state->blackTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/black_piece.png", state).c_str());
+    state->redKingTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/red_king.png", state).c_str());
+    state->blackKingTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/black_king.png", state).c_str());
 
     // Set linear scaling for all piece textures to ensure smooth edges when resized
     if (state->redTexture)
@@ -391,10 +556,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         SDL_SetTextureScaleMode(state->legalMoveTexture, SDL_SCALEMODE_LINEAR);
 
     // Load the New Game button texture
-    state->newGameTexture = IMG_LoadTexture(state->renderer, "assets/new_game.png");
+    std::string newGamePath = getAssetPath("assets/new_game.png", state);
+    state->newGameTexture = IMG_LoadTexture(state->renderer, newGamePath.c_str());
     if (!state->newGameTexture)
     {
-        SDL_Log("Warning: Could not load new_game.png, using procedural fallback.");
+        SDL_Log("Warning: Could not load new_game.png from %s", newGamePath.c_str());
         state->newGameTexture = createCircleTexture(state->renderer, 256, 120, 120, 120, 255);
     }
 
@@ -402,7 +568,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         SDL_SetTextureScaleMode(state->newGameTexture, SDL_SCALEMODE_LINEAR);
 
     // Load the pressed version of the New Game button (filled circle symbol)
-    state->newGamePressedTexture = IMG_LoadTexture(state->renderer, "assets/new_game_filled.png");
+    state->newGamePressedTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/new_game_filled.png", state).c_str());
     if (!state->newGamePressedTexture)
     {
         SDL_Log("Warning: Could not load new_game_filled.png, using procedural fallback.");
@@ -410,6 +576,56 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     }
     if (state->newGamePressedTexture)
         SDL_SetTextureScaleMode(state->newGamePressedTexture, SDL_SCALEMODE_LINEAR);
+
+    // Load Undo button textures
+    state->undoTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/undo.png", state).c_str());
+    if (!state->undoTexture)
+    {
+        SDL_Log("Warning: Using procedural fallback for Undo button.");
+        state->undoTexture = createCircleTexture(state->renderer, 256, 100, 100, 200, 255);
+    }
+    SDL_SetTextureScaleMode(state->undoTexture, SDL_SCALEMODE_LINEAR);
+
+    state->undoPressedTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/undo_filled.png", state).c_str());
+    if (!state->undoPressedTexture)
+    {
+        state->undoPressedTexture = createCircleTexture(state->renderer, 256, 150, 150, 255, 255);
+    }
+    SDL_SetTextureScaleMode(state->undoPressedTexture, SDL_SCALEMODE_LINEAR);
+
+    // Load Redo button textures
+    state->redoTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/redo.png", state).c_str());
+    if (!state->redoTexture)
+    {
+        SDL_Log("Warning: Using procedural fallback for Redo button.");
+        state->redoTexture = createCircleTexture(state->renderer, 256, 100, 200, 100, 255);
+    }
+    SDL_SetTextureScaleMode(state->redoTexture, SDL_SCALEMODE_LINEAR);
+
+    state->redoPressedTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/redo_filled.png", state).c_str());
+    if (!state->redoPressedTexture)
+    {
+        state->redoPressedTexture = createCircleTexture(state->renderer, 256, 150, 255, 150, 255);
+    }
+    SDL_SetTextureScaleMode(state->redoPressedTexture, SDL_SCALEMODE_LINEAR);
+
+    // Load a font and generate text textures
+    // Note: You must place a .ttf file in your assets folder!
+    std::string fontPath = getAssetPath("assets/DayPosterBlackNF.ttf", state);
+    state->font = TTF_OpenFont(fontPath.c_str(), 64);
+    if (state->font)
+    {
+        SDL_Color green = {40, 200, 40, 255};
+        SDL_Color red = {200, 40, 40, 255};
+        state->youWinTexture = createTextureFromText(state->renderer, state->font, "YOU WIN!", green);
+        state->aiWinTexture = createTextureFromText(state->renderer, state->font, "AI WINS!", red);
+    }
+    else
+    {
+        SDL_Log("Warning: Could not load font from %s. Error: %s", fontPath.c_str(), SDL_GetError());
+        state->youWinTexture = createRectTexture(state->renderer, 256, 64, 40, 200, 40, 255);
+        state->aiWinTexture = createRectTexture(state->renderer, 256, 64, 200, 40, 40, 255);
+    }
 
     *appstate = state;
 
@@ -431,19 +647,28 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         {
             SDL_ConvertEventToRenderCoordinates(state->renderer, event);
 
-            float btnW = state->tileSize * 1.0f;
-            float btnH = state->tileSize * 1.0f;
-            float btnX = state->boardXOffset + (state->tileSize * 8.0f - btnW) / 2.0f;
-            float btnY = state->boardYOffset + (state->tileSize * 8.0f) + (state->tileSize * 0.5f);
+            bool insideNewGame = (event->button.x >= state->newGameRect.x && event->button.x <= state->newGameRect.x + state->newGameRect.w &&
+                                  event->button.y >= state->newGameRect.y && event->button.y <= state->newGameRect.y + state->newGameRect.h);
 
-            bool insideButton = (event->button.x >= btnX && event->button.x <= btnX + btnW &&
-                                 event->button.y >= btnY && event->button.y <= btnY + btnH);
+            bool insideUndo = (event->button.x >= state->undoRect.x && event->button.x <= state->undoRect.x + state->undoRect.w &&
+                               event->button.y >= state->undoRect.y && event->button.y <= state->undoRect.y + state->undoRect.h);
+
+            bool insideRedo = (event->button.x >= state->redoRect.x && event->button.x <= state->redoRect.x + state->redoRect.w &&
+                               event->button.y >= state->redoRect.y && event->button.y <= state->redoRect.y + state->redoRect.h);
 
             if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN)
             {
-                if (insideButton)
+                if (insideNewGame)
                 {
                     state->newGamePressed = true;
+                }
+                else if (insideUndo && !state->controller.aiThinking)
+                {
+                    state->undoPressed = true;
+                }
+                else if (insideRedo && !state->controller.aiThinking)
+                {
+                    state->redoPressed = true;
                 }
                 else
                 {
@@ -455,13 +680,13 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
                     if (adjustedX >= 0 && adjustedY >= 0 && col < 8 && row < 8)
                     {
-                        state->controller.handleClick(state->b, row, col);
+                        state->controller.handleClick(state->b, row, col, state->history, state->historyIndex);
                     }
                 }
             }
             else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP)
             {
-                if (state->newGamePressed && insideButton)
+                if (state->newGamePressed && insideNewGame)
                 {
                     // Execute reset only if we released the mouse while still over the button
                     state->b.startup();
@@ -470,9 +695,47 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
                     state->controller.legalMoves.clear();
                     state->controller.animation.active = false;
                     state->controller.aiMoveReady = false;
+                    state->controller.pendingCaptures.clear();
+                    state->history.clear();
+                    state->historyIndex = 0;
+                    state->winner = 0;
                     std::cout << "New Game started!\n";
                 }
                 state->newGamePressed = false;
+
+                if (state->undoPressed && insideUndo)
+                {
+                    if (state->historyIndex >= 2)
+                    {
+                        state->historyIndex -= 2; // Jump back past AI move and Player move
+                        replayHistory(state);
+                        state->controller.selectedRow = -1;
+                        state->controller.selectedCol = -1;
+                        state->controller.legalMoves.clear();
+                        state->controller.animation.active = false;
+                        state->controller.aiMoveReady = false;
+                        state->controller.pendingCaptures.clear();
+                        state->winner = 0;
+                    }
+                }
+                state->undoPressed = false;
+
+                if (state->redoPressed && insideRedo)
+                {
+                    if (state->historyIndex + 2 <= (int)state->history.size())
+                    {
+                        state->historyIndex += 2; // Advance forward past Player move and AI move
+                        replayHistory(state);
+                        state->controller.selectedRow = -1;
+                        state->controller.selectedCol = -1;
+                        state->controller.legalMoves.clear();
+                        state->controller.animation.active = false;
+                        state->controller.aiMoveReady = false;
+                        state->controller.pendingCaptures.clear();
+                        state->winner = 0;
+                    }
+                }
+                state->redoPressed = false;
             }
         }
     }
@@ -490,8 +753,40 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     state->boardXOffset = 0.0f;
     state->boardYOffset = 200.0f; // (800 total height - 400 board height) / 2
 
-    state->controller.updateAI(state->b);
+    // Centralize button layout calculations
+    float btnSize = state->tileSize * 1.0f;
+    float spacing = state->tileSize * 0.5f;
+    float totalWidth = state->tileSize * 8.0f;
+
+    // New Game: Centered at the bottom
+    float btnYBottom = state->boardYOffset + (state->tileSize * 8.0f) + (state->tileSize * 0.5f);
+    state->newGameRect = {state->boardXOffset + (totalWidth - btnSize) / 2.0f, btnYBottom, btnSize, btnSize};
+
+    // Undo & Redo: Centered at the top, above the thinking indicator
+    float btnYTop = state->boardYOffset - btnSize - (state->tileSize * 1.2f);
+    float pairWidth = (btnSize * 2.0f) + spacing;
+    float startX = state->boardXOffset + (totalWidth - pairWidth) / 2.0f;
+
+    state->undoRect = {startX, btnYTop, btnSize, btnSize};
+    state->redoRect = {startX + btnSize + spacing, btnYTop, btnSize, btnSize};
+
+    state->controller.updateAI(state->b, state->history, state->historyIndex);
     state->controller.updateAnimation();
+
+    // Check for win condition if no animation is playing
+    if (!state->controller.animation.active && state->winner == 0)
+    {
+        if (state->b.terminalTest())
+        {
+            // Current player has no moves
+            if (state->b.getTurnPublic() == 'r')
+                state->winner = 2; // Red (Human) has no moves, AI wins
+            else
+                state->winner = 1; // Black (AI) has no moves, Human wins
+
+            std::cout << "Game Over! Winner: " << (state->winner == 1 ? "You" : "AI") << std::endl;
+        }
+    }
 
     SDL_SetRenderDrawColor(state->renderer, 0, 0, 0, 255);
     SDL_RenderClear(state->renderer);
@@ -502,6 +797,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     drawPieces(state->renderer, state);
     drawMoveAnimation(state->renderer, state);
     drawNewGameButton(state->renderer, state);
+    drawUndoButton(state->renderer, state);
+    drawRedoButton(state->renderer, state);
+    drawGameOverMessage(state->renderer, state);
     drawThinkingIndicator(state->renderer, state);
 
     SDL_RenderPresent(state->renderer);
@@ -515,22 +813,48 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 
     if (state)
     {
+        // Safety: If the AI is still thinking in a background thread, we must wait
+        // for it to finish before deleting the state, otherwise the detached
+        // thread will crash when it tries to access the deleted controller/mutex.
+        SDL_Log("Shutting down AI thread...");
+        state->controller.stopAI();
+
         if (state->boardTexture)
             SDL_DestroyTexture(state->boardTexture);
         if (state->redTexture)
             SDL_DestroyTexture(state->redTexture);
         if (state->blackTexture)
             SDL_DestroyTexture(state->blackTexture);
-        if (state->redKingTexture)
+
+        // Safety: Only destroy king textures if they aren't aliases for the base textures
+        if (state->redKingTexture && state->redKingTexture != state->redTexture)
             SDL_DestroyTexture(state->redKingTexture);
-        if (state->blackKingTexture)
+        if (state->blackKingTexture && state->blackKingTexture != state->blackTexture)
             SDL_DestroyTexture(state->blackKingTexture);
+
         if (state->legalMoveTexture)
             SDL_DestroyTexture(state->legalMoveTexture);
         if (state->newGameTexture)
             SDL_DestroyTexture(state->newGameTexture);
         if (state->newGamePressedTexture)
             SDL_DestroyTexture(state->newGamePressedTexture);
+        if (state->undoTexture)
+            SDL_DestroyTexture(state->undoTexture);
+        if (state->undoPressedTexture)
+            SDL_DestroyTexture(state->undoPressedTexture);
+        if (state->redoTexture)
+            SDL_DestroyTexture(state->redoTexture);
+        if (state->redoPressedTexture)
+            SDL_DestroyTexture(state->redoPressedTexture);
+        if (state->youWinTexture)
+            SDL_DestroyTexture(state->youWinTexture);
+        if (state->aiWinTexture)
+            SDL_DestroyTexture(state->aiWinTexture);
+
+        if (state->font)
+            TTF_CloseFont(state->font);
+
+        TTF_Quit();
 
         if (state->renderer)
             SDL_DestroyRenderer(state->renderer);
@@ -540,6 +864,4 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 
         delete state;
     }
-
-    SDL_Quit();
 }
