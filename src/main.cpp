@@ -4,7 +4,7 @@
 // Email       : alex@alexanderresnik.com
 // Version     : 3.0
 // License     : MIT License
-// Description : IceCream checkers engine and GUI.
+// Description : IceCream checkers engine and CheckrGui as one program.
 //=================================================================================
 
 #define SDL_MAIN_USE_CALLBACKS 1

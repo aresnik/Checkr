@@ -1,0 +1,15 @@
+# macOS system files
+.DS_Store
+
+# Build artifacts
+*.o
+*.obj
+*.exe
+*.out
+*.app
+bin/
+build/
+
+# Debug symbols
+*.dSYM/
+*.pdb
