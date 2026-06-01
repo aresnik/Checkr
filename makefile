@@ -2,10 +2,13 @@ CXX = clang++
 CXXFLAGS = -std=c++17 -Wall -I/opt/homebrew/include
 LDFLAGS = -L/opt/homebrew/lib -lSDL3 -lSDL3_image -lSDL3_ttf
 
-TARGET = bin/checkers
+TARGET = bin/checkr
 
-$(TARGET): bin/main.o bin/board.o bin/boardJumps.o bin/boardMoves.o bin/boardPublic.o bin/gameController.o
-	$(CXX) -o $(TARGET) bin/main.o bin/board.o bin/boardJumps.o bin/boardMoves.o bin/boardPublic.o bin/gameController.o $(LDFLAGS)
+$(TARGET): bin/main.o bin/board.o bin/boardJumps.o bin/boardMoves.o bin/boardPublic.o bin/gameController.o bin/uiWidgets.o
+	$(CXX) -o $(TARGET) bin/main.o bin/board.o bin/boardJumps.o bin/boardMoves.o bin/boardPublic.o bin/gameController.o bin/uiWidgets.o $(LDFLAGS)
+
+bin/uiWidgets.o: src/uiWidgets.cpp src/uiWidgets.h
+	$(CXX) $(CXXFLAGS) -c src/uiWidgets.cpp -o bin/uiWidgets.o
 
 bin/main.o: src/main.cpp src/board.h src/gameController.h
 	$(CXX) $(CXXFLAGS) -c src/main.cpp -o bin/main.o

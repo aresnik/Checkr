@@ -2,9 +2,9 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build and Run Checkers",
+            "label": "Build and Run Checkr",
             "type": "shell",
-            "command": "make && ./bin/checkers",
+            "command": "make && ./bin/checkr",
             "group": {
                 "kind": "build",
                 "isDefault": true

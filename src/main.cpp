@@ -4,7 +4,7 @@
 // Email       : alex@alexanderresnik.com
 // Version     : 3.0
 // License     : MIT License
-// Description : IceCream checkers engine and CheckrGui as one program.
+// Description : IceCream checkers engine and GUI.
 //=================================================================================
 
 #define SDL_MAIN_USE_CALLBACKS 1
@@ -18,6 +18,7 @@
 #include <vector>
 #include "board.h"
 #include "gameController.h"
+#include "uiWidgets.h"
 
 struct AppState
 {
@@ -41,21 +42,10 @@ struct AppState
     SDL_Texture *redKingTexture = nullptr;
     SDL_Texture *blackKingTexture = nullptr;
     SDL_Texture *legalMoveTexture = nullptr;
-    SDL_Texture *newGameTexture = nullptr;
-    SDL_Texture *newGamePressedTexture = nullptr;
-    bool newGamePressed = false;
 
-    SDL_FRect newGameRect;
-    SDL_FRect undoRect;
-    SDL_FRect redoRect;
-
-    SDL_Texture *undoTexture = nullptr;
-    SDL_Texture *undoPressedTexture = nullptr;
-    bool undoPressed = false;
-
-    SDL_Texture *redoTexture = nullptr;
-    SDL_Texture *redoPressedTexture = nullptr;
-    bool redoPressed = false;
+    UITextureButton newGameBtn;
+    UITextureButton undoBtn;
+    UITextureButton redoBtn;
 
     // Game over textures and state
     SDL_Texture *youWinTexture = nullptr;
@@ -78,7 +68,7 @@ std::string getAssetPath(const std::string &relativePath, AppState *state)
         if (base)
         {
             std::string baseStr = base;
-            SDL_Log("Internal: SDL_GetBasePath reported: %s", baseStr.c_str());
+            // SDL_Log("Internal: SDL_GetBasePath reported: %s", baseStr.c_str());
             // In SDL3, the pointer returned by SDL_GetBasePath is internally managed.
             // Do NOT call SDL_free on it, as it will cause a crash during SDL_Quit.
 
@@ -294,7 +284,7 @@ void drawPieces(SDL_Renderer *renderer, AppState *state)
         {
             char piece = state->b.getPieceAt8x8(row, col);
 
-            if (piece == 'e' || piece == 'x')
+            if (piece == 'e')
                 continue;
 
             // If this square is part of a pending capture/restore animation, skip drawing
@@ -427,34 +417,6 @@ void drawMoveAnimation(SDL_Renderer *renderer, AppState *state)
     drawPieceAtPixel(renderer, currentX, currentY, animation.piece, state);
 }
 
-void drawNewGameButton(SDL_Renderer *renderer, AppState *state)
-{
-    SDL_Texture *texToDraw = state->newGamePressed ? state->newGamePressedTexture : state->newGameTexture;
-
-    if (!texToDraw)
-        return;
-
-    SDL_RenderTexture(renderer, texToDraw, NULL, &state->newGameRect);
-}
-
-void drawUndoButton(SDL_Renderer *renderer, AppState *state)
-{
-    SDL_Texture *texToDraw = state->undoPressed ? state->undoPressedTexture : state->undoTexture;
-    if (!texToDraw)
-        return;
-
-    SDL_RenderTexture(renderer, texToDraw, NULL, &state->undoRect);
-}
-
-void drawRedoButton(SDL_Renderer *renderer, AppState *state)
-{
-    SDL_Texture *texToDraw = state->redoPressed ? state->redoPressedTexture : state->redoTexture;
-    if (!texToDraw)
-        return;
-
-    SDL_RenderTexture(renderer, texToDraw, NULL, &state->redoRect);
-}
-
 void drawGameOverMessage(SDL_Renderer *renderer, AppState *state)
 {
     if (state->winner == 0)
@@ -469,7 +431,7 @@ void drawGameOverMessage(SDL_Renderer *renderer, AppState *state)
     float msgH = state->tileSize * 1.0f;
     float msgX = state->boardXOffset + (state->tileSize * 8.0f - msgW) / 2.0f;
     // Position: Just below the row of buttons
-    float msgY = state->newGameRect.y + state->newGameRect.h + (state->tileSize * 0.2f);
+    float msgY = state->newGameBtn.rect.y + state->newGameBtn.rect.h + (state->tileSize * 0.2f);
 
     SDL_FRect dst = {msgX, msgY, msgW, msgH};
     SDL_RenderTexture(renderer, tex, NULL, &dst);
@@ -605,59 +567,12 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     if (state->legalMoveTexture)
         SDL_SetTextureScaleMode(state->legalMoveTexture, SDL_SCALEMODE_LINEAR);
 
-    // Load the New Game button texture
-    std::string newGamePath = getAssetPath("assets/new_game.png", state);
-    state->newGameTexture = IMG_LoadTexture(state->renderer, newGamePath.c_str());
-    if (!state->newGameTexture)
-    {
-        SDL_Log("Warning: Could not load new_game.png from %s", newGamePath.c_str());
-        state->newGameTexture = createCircleTexture(state->renderer, 256, 120, 120, 120, 255);
-    }
+    // Load button textures directly into the objects
+    state->newGameBtn.load(state->renderer, getAssetPath("assets/new_game.png", state), getAssetPath("assets/new_game_filled.png", state));
+    state->undoBtn.load(state->renderer, getAssetPath("assets/undo.png", state), getAssetPath("assets/undo_filled.png", state));
+    state->redoBtn.load(state->renderer, getAssetPath("assets/redo.png", state), getAssetPath("assets/redo_filled.png", state));
 
-    if (state->newGameTexture)
-        SDL_SetTextureScaleMode(state->newGameTexture, SDL_SCALEMODE_LINEAR);
-
-    // Load the pressed version of the New Game button
-    state->newGamePressedTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/new_game_fill.png", state).c_str());
-    if (!state->newGamePressedTexture)
-    {
-        SDL_Log("Warning: Could not load new_game_fill.png, using procedural fallback.");
-        state->newGamePressedTexture = createCircleTexture(state->renderer, 256, 200, 200, 200, 255);
-    }
-    if (state->newGamePressedTexture)
-        SDL_SetTextureScaleMode(state->newGamePressedTexture, SDL_SCALEMODE_LINEAR);
-
-    // Load Undo button textures
-    state->undoTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/undo.png", state).c_str());
-    if (!state->undoTexture)
-    {
-        SDL_Log("Warning: Using procedural fallback for Undo button.");
-        state->undoTexture = createCircleTexture(state->renderer, 256, 100, 100, 200, 255);
-    }
-    SDL_SetTextureScaleMode(state->undoTexture, SDL_SCALEMODE_LINEAR);
-
-    state->undoPressedTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/undo_filled.png", state).c_str());
-    if (!state->undoPressedTexture)
-    {
-        state->undoPressedTexture = createCircleTexture(state->renderer, 256, 150, 150, 255, 255);
-    }
-    SDL_SetTextureScaleMode(state->undoPressedTexture, SDL_SCALEMODE_LINEAR);
-
-    // Load Redo button textures
-    state->redoTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/redo.png", state).c_str());
-    if (!state->redoTexture)
-    {
-        SDL_Log("Warning: Using procedural fallback for Redo button.");
-        state->redoTexture = createCircleTexture(state->renderer, 256, 100, 200, 100, 255);
-    }
-    SDL_SetTextureScaleMode(state->redoTexture, SDL_SCALEMODE_LINEAR);
-
-    state->redoPressedTexture = IMG_LoadTexture(state->renderer, getAssetPath("assets/redo_filled.png", state).c_str());
-    if (!state->redoPressedTexture)
-    {
-        state->redoPressedTexture = createCircleTexture(state->renderer, 256, 150, 255, 150, 255);
-    }
-    SDL_SetTextureScaleMode(state->redoPressedTexture, SDL_SCALEMODE_LINEAR);
+    // Fallback logic could be added here if load() returns false, but current assets are stable.
 
     // Load a font and generate text textures
     // Note: You must place a .ttf file in your assets folder!
@@ -697,103 +612,67 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         {
             SDL_ConvertEventToRenderCoordinates(state->renderer, event);
 
-            bool insideNewGame = (event->button.x >= state->newGameRect.x && event->button.x <= state->newGameRect.x + state->newGameRect.w &&
-                                  event->button.y >= state->newGameRect.y && event->button.y <= state->newGameRect.y + state->newGameRect.h);
+            bool overNew, overUndo, overRedo;
+            bool clickedNew = state->newGameBtn.handleEvent(event, overNew);
+            bool clickedUndo = state->undoBtn.handleEvent(event, overUndo);
+            bool clickedRedo = state->redoBtn.handleEvent(event, overRedo);
 
-            bool insideUndo = (event->button.x >= state->undoRect.x && event->button.x <= state->undoRect.x + state->undoRect.w &&
-                               event->button.y >= state->undoRect.y && event->button.y <= state->undoRect.y + state->undoRect.h);
-
-            bool insideRedo = (event->button.x >= state->redoRect.x && event->button.x <= state->redoRect.x + state->redoRect.w &&
-                               event->button.y >= state->redoRect.y && event->button.y <= state->redoRect.y + state->redoRect.h);
-
-            if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+            if (clickedNew)
             {
-                if (insideNewGame)
-                {
-                    state->newGamePressed = true;
-                }
-                else if (insideUndo && !state->controller.aiThinking)
-                {
-                    state->undoPressed = true;
-                }
-                else if (insideRedo && !state->controller.aiThinking)
-                {
-                    state->redoPressed = true;
-                }
-                else
-                {
-                    // Handle board clicks only on DOWN
-                    float adjustedX = event->button.x - state->boardXOffset;
-                    float adjustedY = event->button.y - state->boardYOffset;
-                    int col = static_cast<int>(adjustedX / state->tileSize);
-                    int row = static_cast<int>(adjustedY / state->tileSize);
-
-                    if (adjustedX >= 0 && adjustedY >= 0 && col < 8 && row < 8)
-                    {
-                        state->controller.handleClick(state->b, row, col, state->history, state->historyIndex);
-                    }
-                }
+                state->b.startup();
+                state->controller.selectedRow = -1;
+                state->controller.selectedCol = -1;
+                state->controller.legalMoves.clear();
+                state->controller.animation.active = false;
+                state->controller.aiMoveReady = false;
+                state->controller.pendingCaptures.clear();
+                state->history.clear();
+                state->historyIndex = 0;
+                state->winner = 0;
+                std::cout << "New Game started!\n";
             }
-            else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP)
+            else if (clickedUndo)
             {
-                if (state->newGamePressed && insideNewGame)
+                if (state->historyIndex > 0)
                 {
-                    // Execute reset only if we released the mouse while still over the button
-                    state->b.startup();
+                    MoveRecord m = state->history[state->historyIndex - 1];
+                    state->historyIndex--;
+                    replayHistory(state);
+                    char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
+                    state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol, true);
                     state->controller.selectedRow = -1;
                     state->controller.selectedCol = -1;
                     state->controller.legalMoves.clear();
-                    state->controller.animation.active = false;
-                    state->controller.aiMoveReady = false;
-                    state->controller.pendingCaptures.clear();
-                    state->history.clear();
-                    state->historyIndex = 0;
                     state->winner = 0;
-                    std::cout << "New Game started!\n";
                 }
-                state->newGamePressed = false;
-
-                if (state->undoPressed && insideUndo)
+            }
+            else if (clickedRedo)
+            {
+                if (state->historyIndex < (int)state->history.size())
                 {
-                    if (state->historyIndex > 0)
-                    {
-                        // Get the move we are about to reverse
-                        MoveRecord m = state->history[state->historyIndex - 1];
-
-                        state->historyIndex--;
-                        replayHistory(state);
-
-                        // After replay, piece is back at m.fromRow. Get it and setup reverse animation.
-                        char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
-                        state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol, true);
-
-                        state->controller.selectedRow = -1;
-                        state->controller.selectedCol = -1;
-                        state->controller.legalMoves.clear();
-                        state->winner = 0;
-                    }
+                    MoveRecord m = state->history[state->historyIndex];
+                    char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
+                    state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol);
+                    state->b.tryMove8x8(m.fromRow, m.fromCol, m.toRow, m.toCol);
+                    state->historyIndex++;
+                    state->controller.selectedRow = -1;
+                    state->controller.selectedCol = -1;
+                    state->controller.legalMoves.clear();
+                    state->winner = 0;
                 }
-                state->undoPressed = false;
+            }
+            else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && !overNew && !overUndo && !overRedo)
+            {
+                // Only handle board clicks if the click wasn't on a UI button
+                float adjustedX = event->button.x - state->boardXOffset;
+                float adjustedY = event->button.y - state->boardYOffset;
+                int col = static_cast<int>(adjustedX / state->tileSize);
+                int row = static_cast<int>(adjustedY / state->tileSize);
 
-                if (state->redoPressed && insideRedo)
+                if (adjustedX >= 0 && adjustedY >= 0 && col < 8 && row < 8)
                 {
-                    if (state->historyIndex < (int)state->history.size())
-                    {
-                        MoveRecord m = state->history[state->historyIndex];
-                        char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
-
-                        // IMPORTANT: Setup animation BEFORE calling tryMove8x8 so engine finds the path
-                        state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol);
-                        state->b.tryMove8x8(m.fromRow, m.fromCol, m.toRow, m.toCol);
-
-                        state->historyIndex++;
-                        state->controller.selectedRow = -1;
-                        state->controller.selectedCol = -1;
-                        state->controller.legalMoves.clear();
-                        state->winner = 0;
-                    }
+                    state->controller.handleClick(state->b, row, col, state->history, state->historyIndex);
                 }
-                state->redoPressed = false;
             }
         }
     }
@@ -818,15 +697,22 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
     // New Game: Centered at the bottom
     float btnYBottom = state->boardYOffset + (state->tileSize * 8.0f) + (state->tileSize * 0.5f);
-    state->newGameRect = {state->boardXOffset + (totalWidth - btnSize) / 2.0f, btnYBottom, btnSize, btnSize};
+    state->newGameBtn.updateLayout(state->boardXOffset + (totalWidth - btnSize) / 2.0f, btnYBottom, btnSize, btnSize);
 
     // Undo & Redo: Centered at the top, above the thinking indicator
     float btnYTop = state->boardYOffset - btnSize - (state->tileSize * 1.2f);
     float pairWidth = (btnSize * 2.0f) + spacing;
     float startX = state->boardXOffset + (totalWidth - pairWidth) / 2.0f;
 
-    state->undoRect = {startX, btnYTop, btnSize, btnSize};
-    state->redoRect = {startX + btnSize + spacing, btnYTop, btnSize, btnSize};
+    state->undoBtn.updateLayout(startX, btnYTop, btnSize, btnSize);
+    state->redoBtn.updateLayout(startX + btnSize + spacing, btnYTop, btnSize, btnSize);
+
+    // Logic Check: Can we actually perform these actions?
+    bool engineIdle = !state->controller.aiThinking && !state->controller.animation.active;
+
+    state->undoBtn.enabled = engineIdle && (state->historyIndex > 0);
+    state->redoBtn.enabled = engineIdle && (state->historyIndex < (int)state->history.size());
+    state->newGameBtn.enabled = engineIdle;
 
     state->controller.updateAI(state->b, state->history, state->historyIndex);
     state->controller.updateAnimation();
@@ -854,9 +740,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     drawLegalMoves(state->renderer, state);
     drawPieces(state->renderer, state);
     drawMoveAnimation(state->renderer, state);
-    drawNewGameButton(state->renderer, state);
-    drawUndoButton(state->renderer, state);
-    drawRedoButton(state->renderer, state);
+    state->newGameBtn.render(state->renderer);
+    state->undoBtn.render(state->renderer);
+    state->redoBtn.render(state->renderer);
     drawGameOverMessage(state->renderer, state);
     drawThinkingIndicator(state->renderer, state);
 
@@ -892,18 +778,6 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 
         if (state->legalMoveTexture)
             SDL_DestroyTexture(state->legalMoveTexture);
-        if (state->newGameTexture)
-            SDL_DestroyTexture(state->newGameTexture);
-        if (state->newGamePressedTexture)
-            SDL_DestroyTexture(state->newGamePressedTexture);
-        if (state->undoTexture)
-            SDL_DestroyTexture(state->undoTexture);
-        if (state->undoPressedTexture)
-            SDL_DestroyTexture(state->undoPressedTexture);
-        if (state->redoTexture)
-            SDL_DestroyTexture(state->redoTexture);
-        if (state->redoPressedTexture)
-            SDL_DestroyTexture(state->redoPressedTexture);
         if (state->youWinTexture)
             SDL_DestroyTexture(state->youWinTexture);
         if (state->aiWinTexture)
