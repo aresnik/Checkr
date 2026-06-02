@@ -47,9 +47,17 @@ struct AppState
     UITextureButton undoBtn;
     UITextureButton redoBtn;
 
-    // Game over textures and state
-    SDL_Texture *youWinTexture = nullptr;
-    SDL_Texture *aiWinTexture = nullptr;
+    // Composition-based Modal
+    UIModalDialogBox timeModal;
+    UILabel modalTitle;
+    UIRadioButton modalOptions[6];
+    UITextureButton modalStartBtn;
+
+    UIWorkingIndicator workingIndicator;
+
+    // Game over labels and state
+    UILabel youWinLbl;
+    UILabel aiWinLbl;
     int winner = 0; // 0: none, 1: Player (Red), 2: AI (Black)
 
     std::vector<MoveRecord> history;
@@ -102,31 +110,6 @@ std::string getAssetPath(const std::string &relativePath, AppState *state)
         }
     }
     return state->basePath + relativePath;
-}
-
-// Helper to render a string into a texture using SDL_ttf
-SDL_Texture *createTextureFromText(SDL_Renderer *renderer, TTF_Font *font, const char *text, SDL_Color color)
-{
-    if (!font || !text || text[0] == '\0')
-        return nullptr;
-
-    // Render the text to a high-quality surface
-    SDL_Surface *surface = TTF_RenderText_Blended(font, text, 0, color);
-    if (!surface)
-        return nullptr;
-
-    // Convert surface to GPU texture
-    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-
-    if (texture)
-    {
-        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-        // Enable linear scaling so text looks smooth when resized
-        SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_LINEAR);
-    }
-
-    SDL_DestroySurface(surface);
-    return texture;
 }
 
 // Helper to create the board background as a single texture.
@@ -419,63 +402,10 @@ void drawMoveAnimation(SDL_Renderer *renderer, AppState *state)
 
 void drawGameOverMessage(SDL_Renderer *renderer, AppState *state)
 {
-    if (state->winner == 0)
-        return;
-
-    SDL_Texture *tex = (state->winner == 1) ? state->youWinTexture : state->aiWinTexture;
-    if (!tex)
-        return;
-
-    // Position: Centered horizontally, below the New Game button
-    float msgW = state->tileSize * 4.0f;
-    float msgH = state->tileSize * 1.0f;
-    float msgX = state->boardXOffset + (state->tileSize * 8.0f - msgW) / 2.0f;
-    // Position: Just below the row of buttons
-    float msgY = state->newGameBtn.rect.y + state->newGameBtn.rect.h + (state->tileSize * 0.2f);
-
-    SDL_FRect dst = {msgX, msgY, msgW, msgH};
-    SDL_RenderTexture(renderer, tex, NULL, &dst);
-}
-
-// Draws a simple visual indicator while the AI is calculating its move.
-void drawThinkingIndicator(SDL_Renderer *renderer, AppState *state)
-{
-    if (!state->controller.aiThinking)
-        return;
-
-    // Enable blending for this draw call so the alpha transparency works
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
-    SDL_FRect box;
-    box.w = state->tileSize * 2.0f;
-    box.h = state->tileSize * 0.5f;
-    // Center horizontally: (Total Board Width - Box Width) / 2
-    box.x = state->boardXOffset + (state->tileSize * 8.0f - box.w) / 2.0f;
-    // Position above the board: Top of board - height of box - small margin
-    box.y = state->boardYOffset - box.h - (state->tileSize * 0.2f);
-
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 180);
-    SDL_RenderFillRect(renderer, &box);
-
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-    SDL_RenderRect(renderer, &box);
-
-    Uint32 ticks = SDL_GetTicks();
-    int dotCount = (ticks / 300) % 7;
-
-    for (int i = 0; i < dotCount; i++)
-    {
-        SDL_FRect dot;
-        dot.x = box.x + 10 + i * 12;
-        dot.y = box.y + (box.h / 2) - 2;
-        dot.w = 4;
-        dot.h = 4;
-
-        SDL_RenderFillRect(renderer, &dot);
-    }
-
-    // Restore default blend mode
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
+    if (state->winner == 1)
+        state->youWinLbl.render(renderer);
+    else if (state->winner == 2)
+        state->aiWinLbl.render(renderer);
 }
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
@@ -491,7 +421,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     AppState *state = new AppState();
 
     state->window = SDL_CreateWindow(
-        "Checkers",
+        "Checkr",
         400,
         800,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
@@ -580,16 +510,41 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     state->font = TTF_OpenFont(fontPath.c_str(), 64);
     if (state->font)
     {
+        // 1. Setup the Generic Modal via Composition
+        // Set the modal background color as a property
+        state->timeModal.bgColor = {0, 0, 0, 255};
+
+        state->modalTitle.load(state->renderer, state->font, "Select AI Difficulty", {255, 255, 255, 255});
+        state->timeModal.addChild(&state->modalTitle);
+
+        int times[] = {3, 5, 10, 20, 30, 60};
+        for (int i = 0; i < 6; ++i)
+        {
+            state->modalOptions[i].value = times[i];
+            std::string txt = std::to_string(times[i]) + " seconds";
+            if (times[i] == 60)
+                txt = "1 minute";
+            state->modalOptions[i].label.load(state->renderer, state->font, txt, {255, 255, 255, 255});
+            if (times[i] == 3)
+                state->modalOptions[i].selected = true;
+            state->timeModal.addChild(&state->modalOptions[i]);
+        }
+
+        state->modalStartBtn.load(state->renderer, getAssetPath("assets/OK.png", state),
+                                  getAssetPath("assets/OK_filled.png", state));
+        state->timeModal.addChild(&state->modalStartBtn);
+
+        // 2. Setup Game Over Labels
         SDL_Color green = {40, 200, 40, 255};
         SDL_Color red = {200, 40, 40, 255};
-        state->youWinTexture = createTextureFromText(state->renderer, state->font, "YOU WIN!", green);
-        state->aiWinTexture = createTextureFromText(state->renderer, state->font, "AI WINS!", red);
+        state->youWinLbl.load(state->renderer, state->font, "YOU WIN!", green);
+        state->aiWinLbl.load(state->renderer, state->font, "AI WINS!", red);
     }
     else
     {
         SDL_Log("Warning: Could not load font from %s. Error: %s", fontPath.c_str(), SDL_GetError());
-        state->youWinTexture = createRectTexture(state->renderer, 256, 64, 40, 200, 40, 255);
-        state->aiWinTexture = createRectTexture(state->renderer, 256, 64, 200, 40, 40, 255);
+        state->youWinLbl.texture = createRectTexture(state->renderer, 256, 64, 40, 200, 40, 255);
+        state->aiWinLbl.texture = createRectTexture(state->renderer, 256, 64, 200, 40, 40, 255);
     }
 
     *appstate = state;
@@ -612,24 +567,58 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         {
             SDL_ConvertEventToRenderCoordinates(state->renderer, event);
 
-            bool overNew, overUndo, overRedo;
+            // 1. Handle Modal Interaction if visible
+            if (state->timeModal.visible)
+            {
+                bool dummyOver = false;
+                // Handle Start Button specifically
+                if (state->modalStartBtn.handleEvent(event, dummyOver))
+                {
+                    int selectedTime = 3;
+                    for (int i = 0; i < 6; ++i)
+                        if (state->modalOptions[i].selected)
+                            selectedTime = state->modalOptions[i].value;
+
+                    state->controller.aiTimeLimit = selectedTime;
+                    state->b.startup();
+                    state->timeModal.visible = false;
+
+                    state->controller.selectedRow = -1;
+                    state->controller.selectedCol = -1;
+                    state->controller.legalMoves.clear();
+                    state->controller.animation.active = false;
+                    state->controller.aiMoveReady = false;
+                    state->controller.pendingCaptures.clear();
+                    state->history.clear();
+                    state->historyIndex = 0;
+                    state->winner = 0;
+                    std::cout << "New Game started with AI limit: " << selectedTime << "s\n";
+                    return SDL_APP_CONTINUE;
+                }
+
+                // Handle Radio Buttons for selection
+                for (int i = 0; i < 6; ++i)
+                {
+                    bool radioOver = false;
+                    if (state->modalOptions[i].handleEvent(event, radioOver))
+                    {
+                        for (int j = 0; j < 6; ++j)
+                            state->modalOptions[j].selected = false;
+                        state->modalOptions[i].selected = true;
+                    }
+                }
+                return SDL_APP_CONTINUE; // Modal blocks all other input
+            }
+
+            // 2. Handle Main Game Buttons
+            bool overNew = false, overUndo = false, overRedo = false;
             bool clickedNew = state->newGameBtn.handleEvent(event, overNew);
             bool clickedUndo = state->undoBtn.handleEvent(event, overUndo);
             bool clickedRedo = state->redoBtn.handleEvent(event, overRedo);
 
             if (clickedNew)
             {
-                state->b.startup();
-                state->controller.selectedRow = -1;
-                state->controller.selectedCol = -1;
-                state->controller.legalMoves.clear();
-                state->controller.animation.active = false;
-                state->controller.aiMoveReady = false;
-                state->controller.pendingCaptures.clear();
-                state->history.clear();
-                state->historyIndex = 0;
-                state->winner = 0;
-                std::cout << "New Game started!\n";
+                state->timeModal.visible = true;
             }
             else if (clickedUndo)
             {
@@ -695,6 +684,30 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     float spacing = state->tileSize * 0.5f;
     float totalWidth = state->tileSize * 8.0f;
 
+    // Update Working Indicator and Modal layouts
+    state->workingIndicator.active = state->controller.aiThinking;
+    state->workingIndicator.updateLayout(state->boardXOffset + (totalWidth - 100) / 2, state->boardYOffset - 40, 100, 30);
+
+    state->timeModal.updateLayout(200, 400, 320, 400);
+
+    // Update child layouts inside the modal
+    float mRectX = state->timeModal.rect.x;
+    float mRectY = state->timeModal.rect.y;
+    state->modalTitle.updateLayout(mRectX + 20, mRectY + 20, 280, 40);
+    for (int i = 0; i < 6; ++i)
+    {
+        state->modalOptions[i].updateLayout(mRectX + 30, mRectY + 80 + i * 40, 25, 25);
+    }
+    state->modalStartBtn.updateLayout(mRectX + (320 / 2.0f) - (btnSize / 2.0f), mRectY + 425 - 100, btnSize, btnSize);
+
+    // Update Game Over Label Layouts
+    float msgW = state->tileSize * 4.0f;
+    float msgH = state->tileSize * 1.0f;
+    float msgX = state->boardXOffset + (state->tileSize * 8.0f - msgW) / 2.0f;
+    float msgY = state->newGameBtn.rect.y + state->newGameBtn.rect.h + (state->tileSize * 0.2f);
+    state->youWinLbl.updateLayout(msgX, msgY, msgW, msgH);
+    state->aiWinLbl.updateLayout(msgX, msgY, msgW, msgH);
+
     // New Game: Centered at the bottom
     float btnYBottom = state->boardYOffset + (state->tileSize * 8.0f) + (state->tileSize * 0.5f);
     state->newGameBtn.updateLayout(state->boardXOffset + (totalWidth - btnSize) / 2.0f, btnYBottom, btnSize, btnSize);
@@ -744,7 +757,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     state->undoBtn.render(state->renderer);
     state->redoBtn.render(state->renderer);
     drawGameOverMessage(state->renderer, state);
-    drawThinkingIndicator(state->renderer, state);
+    state->workingIndicator.render(state->renderer);
+    state->timeModal.render(state->renderer);
 
     SDL_RenderPresent(state->renderer);
 
@@ -778,10 +792,6 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 
         if (state->legalMoveTexture)
             SDL_DestroyTexture(state->legalMoveTexture);
-        if (state->youWinTexture)
-            SDL_DestroyTexture(state->youWinTexture);
-        if (state->aiWinTexture)
-            SDL_DestroyTexture(state->aiWinTexture);
 
         if (state->font)
             TTF_CloseFont(state->font);

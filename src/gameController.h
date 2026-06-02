@@ -76,6 +76,9 @@ public:
     // Handle to the background AI thread
     std::thread aiThread;
 
+    // The maximum time (in seconds) the AI is allowed to think
+    int aiTimeLimit = 3;
+
     // Constructor
     GameController();
 

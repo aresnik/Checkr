@@ -11,7 +11,7 @@
 
 // Constructor initializes AI state flags and invalid default AI move positions.
 GameController::GameController()
-    : aiThinking(false), aiMoveReady(false)
+    : aiThinking(false), aiMoveReady(false), aiTimeLimit(3)
 {
     aiFrom = {-1, -1};
     aiTo = {-1, -1};
@@ -20,6 +20,10 @@ GameController::GameController()
 // Starts a visual animation for one piece moving from one square to another.
 void GameController::startMoveAnimation(char piece, int fromRow, int fromCol, int toRow, int toCol, bool isUndo)
 {
+    // Calculate the distance of this segment.
+    // Move = 1, Jump = 2.
+    int distance = std::abs(fromRow - toRow);
+
     animation.active = true;
     animation.piece = piece;
     animation.fromRow = fromRow;
@@ -28,7 +32,10 @@ void GameController::startMoveAnimation(char piece, int fromRow, int fromCol, in
     animation.toCol = toCol;
     animation.isUndo = isUndo;
     animation.startTime = SDL_GetTicks();
-    animation.durationMs = 300;
+
+    // Use a constant velocity: 250ms per square traveled.
+    // A move will take 250ms, while a jump will take 500ms.
+    animation.durationMs = distance * 250;
 }
 
 void GameController::setupPathAnimation(board &b, char piece, int fR, int fC, int tR, int tC, bool isUndo)
@@ -187,12 +194,13 @@ void GameController::handleClick(board &b, int row, int col, std::vector<MoveRec
                 if (aiThread.joinable())
                     aiThread.join();
 
-                aiThread = std::thread([boardCopy, this]() mutable
+                int limit = aiTimeLimit;
+                aiThread = std::thread([boardCopy, this, limit]() mutable
                                        {
                     int fr, fc, tr, tc;
 
                     // Search for the AI's best move at specified depth
-                    bool found = boardCopy.findBestMove8x8(3, fr, fc, tr, tc);
+                    bool found = boardCopy.findBestMove8x8(limit, fr, fc, tr, tc);
 
                     if (found && aiThinking)
                     {
