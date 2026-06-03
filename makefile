@@ -1,14 +1,28 @@
 CXX = clang++
-CXXFLAGS = -std=c++17 -Wall -I/opt/homebrew/include
+
+# Path to the UIWidgets library (sibling directory)
+WIDGET_DIR = ../UIWidgets
+
+CXXFLAGS = -std=c++17 -Wall -I/opt/homebrew/include -I$(WIDGET_DIR)/include
 LDFLAGS = -L/opt/homebrew/lib -lSDL3 -lSDL3_image -lSDL3_ttf
 
 TARGET = bin/checkr
 
-$(TARGET): bin/main.o bin/board.o bin/boardJumps.o bin/boardMoves.o bin/boardPublic.o bin/gameController.o bin/uiWidgets.o
-	$(CXX) -o $(TARGET) bin/main.o bin/board.o bin/boardJumps.o bin/boardMoves.o bin/boardPublic.o bin/gameController.o bin/uiWidgets.o $(LDFLAGS)
+# Object groups
+BOARD_OBJS = bin/board.o bin/boardJumps.o bin/boardMoves.o bin/boardPublic.o
+APP_OBJS = bin/main.o bin/gameController.o
 
-bin/uiWidgets.o: src/uiWidgets.cpp src/uiWidgets.h
-	$(CXX) $(CXXFLAGS) -c src/uiWidgets.cpp -o bin/uiWidgets.o
+# More succinct way to find all widget sources and objects
+WIDGET_SRCS = $(wildcard $(WIDGET_DIR)/include/*.cpp)
+WIDGET_OBJS = $(patsubst $(WIDGET_DIR)/include/%.cpp, bin/%.o, $(WIDGET_SRCS))
+
+$(TARGET): $(APP_OBJS) $(BOARD_OBJS) $(WIDGET_OBJS)
+	$(CXX) -o $(TARGET) $(APP_OBJS) $(BOARD_OBJS) $(WIDGET_OBJS) $(LDFLAGS)
+
+# Pattern rule for compiling UIWidgets library files
+bin/%.o: $(WIDGET_DIR)/include/%.cpp $(WIDGET_DIR)/include/widgets.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 
 bin/main.o: src/main.cpp src/board.h src/gameController.h
 	$(CXX) $(CXXFLAGS) -c src/main.cpp -o bin/main.o
@@ -31,7 +45,7 @@ bin/gameController.o: src/gameController.cpp src/gameController.h
 debug:
 	$(CXX) -g $(CXXFLAGS) -o checkersDebug \
 		src/main.cpp src/board.cpp src/boardJumps.cpp src/boardMoves.cpp \
-		src/boardPublic.cpp src/gameController.cpp \
+		src/boardPublic.cpp src/gameController.cpp $(WIDGET_SRCS) \
 		$(LDFLAGS)
 
 clean:

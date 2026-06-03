@@ -2,7 +2,7 @@
 // Name        : Checkers
 // Author      : Copyright 2026 Alexander Resnik
 // Email       : alex@alexanderresnik.com
-// Version     : 3.0
+// Version     : 1.30
 // License     : MIT License
 // Description : IceCream checkers engine and GUI.
 //=================================================================================
@@ -13,12 +13,12 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <widgets.h>
 #include <iostream>
 #include <string>
 #include <vector>
 #include "board.h"
 #include "gameController.h"
-#include "uiWidgets.h"
 
 struct AppState
 {
@@ -36,6 +36,7 @@ struct AppState
 
     // Textures for smooth rendering
     TTF_Font *font = nullptr;
+    TTF_Font *uiFont = nullptr;
     SDL_Texture *boardTexture = nullptr;
     SDL_Texture *redTexture = nullptr;
     SDL_Texture *blackTexture = nullptr;
@@ -43,21 +44,22 @@ struct AppState
     SDL_Texture *blackKingTexture = nullptr;
     SDL_Texture *legalMoveTexture = nullptr;
 
-    UITextureButton newGameBtn;
-    UITextureButton undoBtn;
-    UITextureButton redoBtn;
+    TextureButton newGameBtn;
+    TextureButton undoBtn;
+    TextureButton redoBtn;
 
     // Composition-based Modal
-    UIModalDialogBox timeModal;
-    UILabel modalTitle;
-    UIRadioButton modalOptions[6];
-    UITextureButton modalStartBtn;
+    DialogBox timeModal;
+    Label modalTitle;
+    RadioButtonGroup difficultyGroup;
+    RadioButton modalOptions[6];
+    TextureButton modalStartBtn;
 
-    UIWorkingIndicator workingIndicator;
+    WorkingIndicator workingIndicator;
 
     // Game over labels and state
-    UILabel youWinLbl;
-    UILabel aiWinLbl;
+    Label youWinLbl;
+    Label aiWinLbl;
     int winner = 0; // 0: none, 1: Player (Red), 2: AI (Black)
 
     std::vector<MoveRecord> history;
@@ -410,7 +412,7 @@ void drawGameOverMessage(SDL_Renderer *renderer, AppState *state)
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
-    SDL_SetAppMetadata("Checkers", "3.0", "com.alexresnik.checkers");
+    SDL_SetAppMetadata("Checkr", "1.30", "com.alexresnik.checkr");
 
     if (!SDL_Init(SDL_INIT_VIDEO))
     {
@@ -498,41 +500,74 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         SDL_SetTextureScaleMode(state->legalMoveTexture, SDL_SCALEMODE_LINEAR);
 
     // Load button textures directly into the objects
-    state->newGameBtn.load(state->renderer, getAssetPath("assets/new_game.png", state), getAssetPath("assets/new_game_filled.png", state));
-    state->undoBtn.load(state->renderer, getAssetPath("assets/undo.png", state), getAssetPath("assets/undo_filled.png", state));
-    state->redoBtn.load(state->renderer, getAssetPath("assets/redo.png", state), getAssetPath("assets/redo_filled.png", state));
+    // Swapped new_game icons and used 3-arg setup to ensure icons reset on release
+    state->newGameBtn.setTextures(
+        IMG_LoadTexture(state->renderer, getAssetPath("assets/new_game.png", state).c_str()),
+        nullptr,
+        IMG_LoadTexture(state->renderer, getAssetPath("assets/new_game_filled.png", state).c_str()));
+
+    state->undoBtn.setTextures(
+        IMG_LoadTexture(state->renderer, getAssetPath("assets/undo.png", state).c_str()),
+        nullptr,
+        IMG_LoadTexture(state->renderer, getAssetPath("assets/undo_filled.png", state).c_str()));
+
+    state->redoBtn.setTextures(
+        IMG_LoadTexture(state->renderer, getAssetPath("assets/redo.png", state).c_str()),
+        nullptr,
+        IMG_LoadTexture(state->renderer, getAssetPath("assets/redo_filled.png", state).c_str()));
 
     // Fallback logic could be added here if load() returns false, but current assets are stable.
 
     // Load a font and generate text textures
-    // Note: You must place a .ttf file in your assets folder!
     std::string fontPath = getAssetPath("assets/DayPosterBlackNF.ttf", state);
     state->font = TTF_OpenFont(fontPath.c_str(), 64);
-    if (state->font)
-    {
-        // 1. Setup the Generic Modal via Composition
-        // Set the modal background color as a property
-        state->timeModal.bgColor = {0, 0, 0, 255};
+    state->uiFont = TTF_OpenFont(fontPath.c_str(), 28);
 
-        state->modalTitle.load(state->renderer, state->font, "Select AI Difficulty", {255, 255, 255, 255});
+    if (state->font && state->uiFont)
+    {
+        // Setup the DialogBox container
+        state->timeModal.setColors({20, 20, 20, 240}, {255, 255, 255, 255});
+        state->timeModal.setBorderWidth(2.0f);
+
+        state->modalTitle.load(state->renderer, state->uiFont, "Select AI Difficulty", {255, 255, 255, 255});
         state->timeModal.addChild(&state->modalTitle);
 
         int times[] = {3, 5, 10, 20, 30, 60};
         for (int i = 0; i < 6; ++i)
         {
-            state->modalOptions[i].value = times[i];
+            // Initialize the existing object in the array instead of using '='
+            state->modalOptions[i].setValue(times[i]);
+
             std::string txt = std::to_string(times[i]) + " seconds";
             if (times[i] == 60)
                 txt = "1 minute";
-            state->modalOptions[i].label.load(state->renderer, state->font, txt, {255, 255, 255, 255});
-            if (times[i] == 3)
-                state->modalOptions[i].selected = true;
-            state->timeModal.addChild(&state->modalOptions[i]);
+
+            state->modalOptions[i].getLabel().load(state->renderer, state->uiFont, txt, {220, 220, 220, 255});
+            state->difficultyGroup.addButton(&state->modalOptions[i]);
         }
 
-        state->modalStartBtn.load(state->renderer, getAssetPath("assets/OK.png", state),
-                                  getAssetPath("assets/OK_filled.png", state));
+        // Use the Group method to set the default selection as you suggested
+        state->difficultyGroup.setSelectedValue(3);
+
+        state->timeModal.addChild(&state->difficultyGroup);
+
+        state->modalStartBtn.setTextures(
+            IMG_LoadTexture(state->renderer, getAssetPath("assets/OK.png", state).c_str()),
+            nullptr,
+            IMG_LoadTexture(state->renderer, getAssetPath("assets/OK_filled.png", state).c_str()));
+
+        // Setup Start Button callback
+        state->modalStartBtn.setOnClickCallback([state]()
+                                                {
+            state->controller.aiTimeLimit = state->difficultyGroup.getSelectedValue();
+            state->b.startup();
+            state->timeModal.visible = false;
+            state->winner = 0;
+            state->history.clear();
+            state->historyIndex = 0; });
+
         state->timeModal.addChild(&state->modalStartBtn);
+        state->timeModal.visible = true;
 
         // 2. Setup Game Over Labels
         SDL_Color green = {40, 200, 40, 255};
@@ -543,8 +578,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     else
     {
         SDL_Log("Warning: Could not load font from %s. Error: %s", fontPath.c_str(), SDL_GetError());
-        state->youWinLbl.texture = createRectTexture(state->renderer, 256, 64, 40, 200, 40, 255);
-        state->aiWinLbl.texture = createRectTexture(state->renderer, 256, 64, 200, 40, 40, 255);
     }
 
     *appstate = state;
@@ -570,48 +603,16 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
             // 1. Handle Modal Interaction if visible
             if (state->timeModal.visible)
             {
-                bool dummyOver = false;
-                // Handle Start Button specifically
-                if (state->modalStartBtn.handleEvent(event, dummyOver))
-                {
-                    int selectedTime = 3;
-                    for (int i = 0; i < 6; ++i)
-                        if (state->modalOptions[i].selected)
-                            selectedTime = state->modalOptions[i].value;
-
-                    state->controller.aiTimeLimit = selectedTime;
-                    state->b.startup();
-                    state->timeModal.visible = false;
-
-                    state->controller.selectedRow = -1;
-                    state->controller.selectedCol = -1;
-                    state->controller.legalMoves.clear();
-                    state->controller.animation.active = false;
-                    state->controller.aiMoveReady = false;
-                    state->controller.pendingCaptures.clear();
-                    state->history.clear();
-                    state->historyIndex = 0;
-                    state->winner = 0;
-                    std::cout << "New Game started with AI limit: " << selectedTime << "s\n";
-                    return SDL_APP_CONTINUE;
-                }
-
-                // Handle Radio Buttons for selection
-                for (int i = 0; i < 6; ++i)
-                {
-                    bool radioOver = false;
-                    if (state->modalOptions[i].handleEvent(event, radioOver))
-                    {
-                        for (int j = 0; j < 6; ++j)
-                            state->modalOptions[j].selected = false;
-                        state->modalOptions[i].selected = true;
-                    }
-                }
+                bool isOverModal = false;
+                state->timeModal.handleEvent(event, isOverModal);
                 return SDL_APP_CONTINUE; // Modal blocks all other input
             }
 
             // 2. Handle Main Game Buttons
             bool overNew = false, overUndo = false, overRedo = false;
+
+            // Callback approach for main buttons can be added later; keeping manual check for now
+
             bool clickedNew = state->newGameBtn.handleEvent(event, overNew);
             bool clickedUndo = state->undoBtn.handleEvent(event, overUndo);
             bool clickedRedo = state->redoBtn.handleEvent(event, overRedo);
@@ -688,16 +689,13 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     state->workingIndicator.active = state->controller.aiThinking;
     state->workingIndicator.updateLayout(state->boardXOffset + (totalWidth - 100) / 2, state->boardYOffset - 40, 100, 30);
 
-    state->timeModal.updateLayout(200, 400, 320, 400);
+    state->timeModal.updateLayout(40, 200, 320, 400);
 
     // Update child layouts inside the modal
     float mRectX = state->timeModal.rect.x;
     float mRectY = state->timeModal.rect.y;
     state->modalTitle.updateLayout(mRectX + 20, mRectY + 20, 280, 40);
-    for (int i = 0; i < 6; ++i)
-    {
-        state->modalOptions[i].updateLayout(mRectX + 30, mRectY + 80 + i * 40, 25, 25);
-    }
+    state->difficultyGroup.updateLayout(mRectX + 30, mRectY + 80, 25, 25);
     state->modalStartBtn.updateLayout(mRectX + (320 / 2.0f) - (btnSize / 2.0f), mRectY + 425 - 100, btnSize, btnSize);
 
     // Update Game Over Label Layouts
@@ -795,6 +793,8 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 
         if (state->font)
             TTF_CloseFont(state->font);
+        if (state->uiFont)
+            TTF_CloseFont(state->uiFont);
 
         TTF_Quit();
 

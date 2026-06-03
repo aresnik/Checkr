@@ -5,6 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/opt/homebrew/include",
+                "${workspaceFolder}/../UIWidgets/include"
             ],
             "macFrameworkPath": [
                 "/Library/Frameworks"
