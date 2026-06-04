@@ -5,7 +5,6 @@
  */
 
 #include "gameController.h"
-#include "board.h"
 #include <iostream>
 #include <thread>
 

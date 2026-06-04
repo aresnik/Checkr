@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/opt/homebrew/include",
-                "${workspaceFolder}/../UIWidgets/include"
+                "${workspaceFolder}/../UIWidgets/src",
+                "${workspaceFolder}/../IceCream/src"
             ],
             "macFrameworkPath": [
                 "/Library/Frameworks"

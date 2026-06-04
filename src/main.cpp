@@ -1,10 +1,10 @@
 //=================================================================================
-// Name        : Checkers
+// Name        : Checkr
 // Author      : Copyright 2026 Alexander Resnik
 // Email       : alex@alexanderresnik.com
 // Version     : 1.30
 // License     : MIT License
-// Description : IceCream checkers engine and GUI.
+// Description : IceCream checkers engine and the Checkr GUI together.
 //=================================================================================
 
 #define SDL_MAIN_USE_CALLBACKS 1
