@@ -89,3 +89,12 @@ The project is built using:
 - SDL3
 - Makefiles
 - Visual Studio Code
+<<<<<<< HEAD
+=======
+
+---
+
+# Project Status
+
+This project is currently under active development as part of an ongoing modernization and refactoring effort from a legacy terminal-based engine into a fully featured graphical Checkers application.
+>>>>>>> 1f5dd9d73a5f11558e5d12e67a29278c3ceebfd0
