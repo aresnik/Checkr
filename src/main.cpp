@@ -4,7 +4,7 @@
 // Email       : alex@alexanderresnik.com
 // Version     : 1.30
 // License     : MIT License
-// Description : IceCream checkers engine and the Checkr GUI together.
+// Description : A checkers game GUI frontend.
 //=================================================================================
 
 #define SDL_MAIN_USE_CALLBACKS 1
