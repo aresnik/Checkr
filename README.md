@@ -8,8 +8,8 @@ This project began as a classic terminal-based Checkers AI and has since been tr
 
 - Graphical user interface using SDL3
 - Human vs Computer gameplay
-- Human vs Human gameplay (comming)
-- Computer vs Computer gameplay(comming)
+- Human vs Human gameplay (coming)
+- Computer vs Computer gameplay (coming)
 - Mouse-based piece selection and movement
 - Animated checker movement
 - Forced jump enforcement
@@ -89,12 +89,3 @@ The project is built using:
 - SDL3
 - Makefiles
 - Visual Studio Code
-<<<<<<< HEAD
-=======
-
----
-
-# Project Status
-
-This project is currently under active development as part of an ongoing modernization and refactoring effort from a legacy terminal-based engine into a fully featured graphical Checkers application.
->>>>>>> 1f5dd9d73a5f11558e5d12e67a29278c3ceebfd0

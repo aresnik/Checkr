@@ -10,7 +10,7 @@
 
 // Constructor initializes AI state flags and invalid default AI move positions.
 GameController::GameController()
-    : aiThinking(false), aiMoveReady(false), aiTimeLimit(3)
+    : aiThinking(false), aiMoveReady(false), aiTimeLimit(3), pvpMode(false)
 {
     aiFrom = {-1, -1};
     aiTo = {-1, -1};
@@ -35,6 +35,10 @@ void GameController::startMoveAnimation(char piece, int fromRow, int fromCol, in
     // Use a constant velocity: 250ms per square traveled.
     // A move will take 250ms, while a jump will take 500ms.
     animation.durationMs = distance * 250;
+
+    // Set the sound trigger: moves of distance > 1 are jumps (captures)
+    // We don't play capture sounds on Undo to avoid confusion
+    soundTrigger = (distance > 1 && !isUndo) ? 2 : 1;
 }
 
 void GameController::setupPathAnimation(board &b, char piece, int fR, int fC, int tR, int tC, bool isUndo)
@@ -106,20 +110,20 @@ std::vector<Square> GameController::getLegalMovesForSelection(board &b, int row,
 }
 
 // Handles a mouse click on the board.
-void GameController::handleClick(board &b, int row, int col, std::vector<MoveRecord> &history, int &historyIndex)
+bool GameController::handleClick(board &b, int row, int col, std::vector<MoveRecord> &history, int &historyIndex)
 {
     // Ignore input while an animation is running, while AI is thinking,
     // or when it is the black AI player's turn.
-    if (animation.active || aiThinking || b.getTurnPublic() == 'b')
-        return;
+    if (animation.active || aiThinking || (!pvpMode && b.getTurnPublic() == 'b'))
+        return false;
 
     // Ignore clicks outside the board.
     if (row < 0 || row >= 8 || col < 0 || col >= 8)
-        return;
+        return false;
 
     // Ignore light squares because checkers pieces only move on dark squares.
     if ((row + col) % 2 == 0)
-        return;
+        return false;
 
     // No piece is currently selected.
     if (selectedRow == -1 && selectedCol == -1)
@@ -134,7 +138,9 @@ void GameController::handleClick(board &b, int row, int col, std::vector<MoveRec
             legalMoves = getLegalMovesForSelection(b, row, col);
 
             std::cout << "Selected piece: (" << row << ", " << col << ")\n";
+            return false; // Selection only, no sound needed
         }
+        return false;
     }
     else
     {
@@ -146,30 +152,43 @@ void GameController::handleClick(board &b, int row, int col, std::vector<MoveRec
             legalMoves = getLegalMovesForSelection(b, row, col);
 
             std::cout << "Reselected piece: (" << row << ", " << col << ")\n";
+            return false; // Reselection only, no sound needed
         }
         else
         {
-            // Store piece type and setup animation before applying the move.
-            char movingPiece = b.getPieceAt8x8(selectedRow, selectedCol);
-            setupPathAnimation(b, movingPiece, selectedRow, selectedCol, row, col);
-
-            // Ask the board engine to apply the move.
-            bool moved = b.tryMove8x8(selectedRow, selectedCol, row, col);
-
-            if (moved)
+            // Check if the clicked square is a legal move destination before animating.
+            bool isLegal = false;
+            for (const auto &m : legalMoves)
             {
-                // If we are making a new move while having undid previous ones,
-                // clear the "future" history (VS Code style).
-                if (historyIndex < (int)history.size())
-                    history.erase(history.begin() + historyIndex, history.end());
-
-                history.push_back({selectedRow, selectedCol, row, col});
-                historyIndex++;
-
-                std::cout << "Moved from (" << selectedRow << ", " << selectedCol
-                          << ") to (" << row << ", " << col << ")\n";
+                if (m.row == row && m.col == col)
+                {
+                    isLegal = true;
+                    break;
+                }
             }
-            else
+
+            bool moved = false;
+            if (isLegal)
+            {
+                // Store piece type and setup animation before applying the move.
+                char movingPiece = b.getPieceAt8x8(selectedRow, selectedCol);
+                setupPathAnimation(b, movingPiece, selectedRow, selectedCol, row, col);
+                moved = b.tryMove8x8(selectedRow, selectedCol, row, col);
+
+                if (moved)
+                {
+                    if (historyIndex < (int)history.size())
+                        history.erase(history.begin() + historyIndex, history.end());
+
+                    history.push_back({selectedRow, selectedCol, row, col});
+                    historyIndex++;
+
+                    std::cout << "Moved from (" << selectedRow << ", " << selectedCol
+                              << ") to (" << row << ", " << col << ")\n";
+                }
+            }
+
+            if (!moved)
             {
                 std::cout << "Illegal move from (" << selectedRow << ", "
                           << selectedCol << ") to (" << row << ", " << col << ")\n";
@@ -182,7 +201,7 @@ void GameController::handleClick(board &b, int row, int col, std::vector<MoveRec
 
             // If the human move succeeded and it is now the AI's turn,
             // start AI move search on a detached background thread.
-            if (moved && b.getTurnPublic() == 'b' && !aiThinking)
+            if (!pvpMode && moved && b.getTurnPublic() == 'b' && !aiThinking)
             {
                 aiThinking = true;
 
@@ -213,24 +232,28 @@ void GameController::handleClick(board &b, int row, int col, std::vector<MoveRec
                     // Mark the AI as done thinking.
                     aiThinking = false; });
             }
+            return moved; // Return whether the move was successful to trigger sound
         }
     }
+    return false; // Fallback for any other path
 }
 
 // Returns true if the piece at the given square belongs to the player whose turn it is.
 bool GameController::isCurrentPlayersPiece(const board &b, int row, int col) const
 {
-    char piece = b.getPieceAt8x8(row, col);
-    char turn = b.getTurnPublic();
+    const char piece = b.getPieceAt8x8(row, col);
+    const char turn = b.getTurnPublic();
 
     if (turn == 'b')
         return (piece == 'b' || piece == 'B');
-    else
+    if (turn == 'r')
         return (piece == 'r' || piece == 'R');
+
+    return false;
 }
 
 // Applies the AI's completed move to the live board once the background thread has found it.
-void GameController::updateAI(board &b, std::vector<MoveRecord> &history, int &historyIndex)
+bool GameController::updateAI(board &b, std::vector<MoveRecord> &history, int &historyIndex)
 {
     // Only apply the AI move once it is ready and no animation is currently active.
     if (aiMoveReady && !animation.active)
@@ -267,11 +290,10 @@ void GameController::updateAI(board &b, std::vector<MoveRecord> &history, int &h
             std::cout << "AI moved from (" << from.row << ", " << from.col
                       << ") to (" << to.row << ", " << to.col << ")\n";
         }
-        else
-        {
-            std::cout << "AI move failed to apply.\n";
-        }
+
+        return aiApplied;
     }
+    return false;
 }
 
 // Continues a multi-segment animation path, such as a multi-jump move.
