@@ -73,11 +73,17 @@ public:
     Square aiFrom;
     Square aiTo;
 
+    // Signal for the UI to play a specific sound (0: none, 1: move, 2: capture)
+    int soundTrigger = 0;
+
     // Handle to the background AI thread
     std::thread aiThread;
 
     // The maximum time (in seconds) the AI is allowed to think
     int aiTimeLimit = 3;
+
+    // If true, input is accepted for both players and AI is disabled
+    bool pvpMode = false;
 
     // Constructor
     GameController();
@@ -92,13 +98,13 @@ public:
     std::vector<Square> getLegalMovesForSelection(board &b, int row, int col);
 
     // Handles mouse clicks and move selection logic
-    void handleClick(board &b, int row, int col, std::vector<MoveRecord> &history, int &historyIndex);
+    bool handleClick(board &b, int row, int col, std::vector<MoveRecord> &history, int &historyIndex);
 
     // Checks if a selected piece belongs to the current player
     bool isCurrentPlayersPiece(const board &b, int row, int col) const;
 
     // Updates AI state and applies completed AI moves
-    void updateAI(board &b, std::vector<MoveRecord> &history, int &historyIndex);
+    bool updateAI(board &b, std::vector<MoveRecord> &history, int &historyIndex);
 
     // Path of squares used for multi-jump animations
     std::vector<Square> animationPath;

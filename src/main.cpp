@@ -13,7 +13,8 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
-#include <widgets.h>
+#include <SDL3_mixer/SDL_mixer.h>
+#include "widgets.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -44,9 +45,32 @@ struct AppState
     SDL_Texture *blackKingTexture = nullptr;
     SDL_Texture *legalMoveTexture = nullptr;
 
+    // SDL3_mixer 3.x uses MIX_Mixer and MIX_Audio instead of Mix_Chunk
+    MIX_Mixer *mixer = nullptr;
+    MIX_Audio *moveSfx = nullptr;
+    MIX_Audio *captureSfx = nullptr;
+    MIX_Audio *winSfx = nullptr;
+
     TextureButton newGameBtn;
     TextureButton undoBtn;
     TextureButton redoBtn;
+    TextureButton soundBtn;
+    TextureButton homeBtn;
+    TextureButton privacyBtn;
+
+    bool soundEnabled = true;
+    SDL_Texture *soundOnTex = nullptr;
+    SDL_Texture *soundOnFilledTex = nullptr;
+    SDL_Texture *soundOffTex = nullptr;
+    SDL_Texture *soundOffFilledTex = nullptr;
+    SDL_Texture *homeTex = nullptr;
+    SDL_Texture *homeFilledTex = nullptr;
+    SDL_Texture *privacyTex = nullptr;
+    SDL_Texture *privacyFilledTex = nullptr;
+
+    ToggleSwitch *pvpToggle = nullptr;
+    Label pvpLabelHuman;
+    Label pvpLabelAi;
 
     // Composition-based Modal
     DialogBox timeModal;
@@ -58,8 +82,8 @@ struct AppState
     WorkingIndicator workingIndicator;
 
     // Game over labels and state
-    Label youWinLbl;
-    Label aiWinLbl;
+    Label redWinLbl;
+    Label blackWinLbl;
     int winner = 0; // 0: none, 1: Player (Red), 2: AI (Black)
 
     std::vector<MoveRecord> history;
@@ -405,20 +429,24 @@ void drawMoveAnimation(SDL_Renderer *renderer, AppState *state)
 void drawGameOverMessage(SDL_Renderer *renderer, AppState *state)
 {
     if (state->winner == 1)
-        state->youWinLbl.render(renderer);
+        state->redWinLbl.render(renderer);
     else if (state->winner == 2)
-        state->aiWinLbl.render(renderer);
+        state->blackWinLbl.render(renderer);
 }
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     SDL_SetAppMetadata("Checkr", "1.30", "com.alexresnik.checkr");
 
-    if (!SDL_Init(SDL_INIT_VIDEO))
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
     {
         std::cerr << "SDL_Init Error: " << SDL_GetError() << '\n';
         return SDL_APP_FAILURE;
     }
+
+    // Enable V-Sync to prevent the CPU/GPU from overworking,
+    // which solves the overheating issue on mobile devices.
+    SDL_SetHint(SDL_HINT_RENDER_VSYNC, "1");
 
     AppState *state = new AppState();
 
@@ -450,6 +478,16 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     {
         SDL_Log("TTF_Init Error: %s", SDL_GetError());
         return SDL_APP_FAILURE;
+    }
+
+    // SDL3_mixer 3.x Initialization
+    if (MIX_Init())
+    {
+        state->mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, NULL);
+    }
+    else
+    {
+        SDL_Log("MIX_Init Error: %s", SDL_GetError());
     }
 
     // Set a logical 400x800 coordinate system.
@@ -499,6 +537,14 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     if (state->legalMoveTexture)
         SDL_SetTextureScaleMode(state->legalMoveTexture, SDL_SCALEMODE_LINEAR);
 
+    // Load Sound Effects using the new MIX_LoadAudio
+    if (state->mixer)
+    {
+        state->moveSfx = MIX_LoadAudio(state->mixer, getAssetPath("assets/move.wav", state).c_str(), false);
+        state->captureSfx = MIX_LoadAudio(state->mixer, getAssetPath("assets/capture.wav", state).c_str(), false);
+        state->winSfx = MIX_LoadAudio(state->mixer, getAssetPath("assets/win.wav", state).c_str(), false);
+    }
+
     // Load button textures directly into the objects
     // Swapped new_game icons and used 3-arg setup to ensure icons reset on release
     state->newGameBtn.setTextures(
@@ -516,12 +562,27 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         nullptr,
         IMG_LoadTexture(state->renderer, getAssetPath("assets/redo_filled.png", state).c_str()));
 
+    // Load textures for the new utility buttons
+    state->soundOnTex = IMG_LoadTexture(state->renderer, getAssetPath("assets/sound_on.png", state).c_str());
+    state->soundOnFilledTex = IMG_LoadTexture(state->renderer, getAssetPath("assets/sound_on_filled.png", state).c_str());
+    state->soundOffTex = IMG_LoadTexture(state->renderer, getAssetPath("assets/sound_off.png", state).c_str());
+    state->soundOffFilledTex = IMG_LoadTexture(state->renderer, getAssetPath("assets/sound_off_filled.png", state).c_str());
+    state->homeTex = IMG_LoadTexture(state->renderer, getAssetPath("assets/home.png", state).c_str());
+    state->homeFilledTex = IMG_LoadTexture(state->renderer, getAssetPath("assets/home_filled.png", state).c_str());
+    state->privacyTex = IMG_LoadTexture(state->renderer, getAssetPath("assets/privacy.png", state).c_str());
+    state->privacyFilledTex = IMG_LoadTexture(state->renderer, getAssetPath("assets/privacy_filled.png", state).c_str());
+
+    // Initialize buttons with default textures
+    state->soundBtn.setTextures(state->soundOnTex, nullptr, state->soundOnFilledTex);
+    state->homeBtn.setTextures(state->homeTex, nullptr, state->homeFilledTex);
+    state->privacyBtn.setTextures(state->privacyTex, nullptr, state->privacyFilledTex);
+
     // Fallback logic could be added here if load() returns false, but current assets are stable.
 
     // Load a font and generate text textures
     std::string fontPath = getAssetPath("assets/DayPosterBlackNF.ttf", state);
     state->font = TTF_OpenFont(fontPath.c_str(), 64);
-    state->uiFont = TTF_OpenFont(fontPath.c_str(), 28);
+    state->uiFont = TTF_OpenFont(fontPath.c_str(), 22);
 
     if (state->font && state->uiFont)
     {
@@ -529,8 +590,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         state->timeModal.setColors({20, 20, 20, 240}, {255, 255, 255, 255});
         state->timeModal.setBorderWidth(2.0f);
 
+        // Setup the Human/AI toggle labels
+        state->pvpLabelHuman.load(state->renderer, state->uiFont, "Human", {255, 255, 255, 255});
+        state->pvpLabelAi.load(state->renderer, state->uiFont, "AI", {255, 255, 255, 255});
+
         state->modalTitle.load(state->renderer, state->uiFont, "Select AI Difficulty", {255, 255, 255, 255});
-        state->timeModal.addChild(&state->modalTitle);
 
         int times[] = {3, 5, 10, 20, 30, 60};
         for (int i = 0; i < 6; ++i)
@@ -559,7 +623,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         // Setup Start Button callback
         state->modalStartBtn.setOnClickCallback([state]()
                                                 {
+            // OFF (False) = Human Mode, ON (True) = AI Mode
+            state->controller.pvpMode = (state->pvpToggle ? !state->pvpToggle->isSwitchToggled() : false);
             state->controller.aiTimeLimit = state->difficultyGroup.getSelectedValue();
+
+            SDL_Color white = {255, 255, 255, 255};
+            state->blackWinLbl.load(state->renderer, state->font, "BLACK WINS!", white);
+
             state->b.startup();
             state->timeModal.visible = false;
             state->winner = 0;
@@ -570,10 +640,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         state->timeModal.visible = true;
 
         // 2. Setup Game Over Labels
-        SDL_Color green = {40, 200, 40, 255};
+        SDL_Color white = {255, 255, 255, 255};
         SDL_Color red = {200, 40, 40, 255};
-        state->youWinLbl.load(state->renderer, state->font, "YOU WIN!", green);
-        state->aiWinLbl.load(state->renderer, state->font, "AI WINS!", red);
+        state->redWinLbl.load(state->renderer, state->font, "RED WINS!", red);
+        state->blackWinLbl.load(state->renderer, state->font, "BLACK WINS!", white);
     }
     else
     {
@@ -594,77 +664,107 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         return SDL_APP_SUCCESS;
     }
 
-    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN || event->type == SDL_EVENT_MOUSE_BUTTON_UP)
+    // Convert all pointer events (motion and clicks) to the logical 400x800 coordinate system.
+    // This ensures hit detection works correctly on High-DPI (Retina) mobile screens.
+    if (event->type == SDL_EVENT_MOUSE_MOTION ||
+        event->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+        event->type == SDL_EVENT_MOUSE_BUTTON_UP)
     {
-        if (event->button.button == SDL_BUTTON_LEFT)
+        SDL_ConvertEventToRenderCoordinates(state->renderer, event);
+
+        // 1. Handle Modal Interaction if visible.
+        // The modal blocks all other inputs (buttons and board clicks) until closed.
+        if (state->timeModal.visible)
         {
-            SDL_ConvertEventToRenderCoordinates(state->renderer, event);
+            bool isOverModal = false;
+            state->timeModal.handleEvent(event, isOverModal);
+            if (state->pvpToggle)
+                state->pvpToggle->handleEvent(*event);
+            return SDL_APP_CONTINUE;
+        }
 
-            // 1. Handle Modal Interaction if visible
-            if (state->timeModal.visible)
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN || event->type == SDL_EVENT_MOUSE_BUTTON_UP)
+        {
+            if (event->button.button == SDL_BUTTON_LEFT)
             {
-                bool isOverModal = false;
-                state->timeModal.handleEvent(event, isOverModal);
-                return SDL_APP_CONTINUE; // Modal blocks all other input
-            }
+                // 2. Handle Main Game Buttons
+                bool overNew = false, overUndo = false, overRedo = false, overSound = false, overHome = false, overPrivacy = false;
 
-            // 2. Handle Main Game Buttons
-            bool overNew = false, overUndo = false, overRedo = false;
+                // Callback approach for main buttons can be added later; keeping manual check for now
 
-            // Callback approach for main buttons can be added later; keeping manual check for now
+                bool clickedNew = state->newGameBtn.handleEvent(event, overNew);
+                bool clickedUndo = state->undoBtn.handleEvent(event, overUndo);
+                bool clickedRedo = state->redoBtn.handleEvent(event, overRedo);
+                bool clickedSound = state->soundBtn.handleEvent(event, overSound);
+                bool clickedHome = state->homeBtn.handleEvent(event, overHome);
+                bool clickedPrivacy = state->privacyBtn.handleEvent(event, overPrivacy);
 
-            bool clickedNew = state->newGameBtn.handleEvent(event, overNew);
-            bool clickedUndo = state->undoBtn.handleEvent(event, overUndo);
-            bool clickedRedo = state->redoBtn.handleEvent(event, overRedo);
-
-            if (clickedNew)
-            {
-                state->timeModal.visible = true;
-            }
-            else if (clickedUndo)
-            {
-                if (state->historyIndex > 0)
+                if (clickedNew)
                 {
-                    MoveRecord m = state->history[state->historyIndex - 1];
-                    state->historyIndex--;
-                    replayHistory(state);
-                    char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
-                    state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol, true);
-                    state->controller.selectedRow = -1;
-                    state->controller.selectedCol = -1;
-                    state->controller.legalMoves.clear();
-                    state->winner = 0;
+                    state->timeModal.visible = true;
                 }
-            }
-            else if (clickedRedo)
-            {
-                if (state->historyIndex < (int)state->history.size())
+                else if (clickedSound)
                 {
-                    MoveRecord m = state->history[state->historyIndex];
-                    char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
-                    state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol);
-                    state->b.tryMove8x8(m.fromRow, m.fromCol, m.toRow, m.toCol);
-                    state->historyIndex++;
-                    state->controller.selectedRow = -1;
-                    state->controller.selectedCol = -1;
-                    state->controller.legalMoves.clear();
-                    state->winner = 0;
+                    state->soundEnabled = !state->soundEnabled;
+                    if (state->soundEnabled)
+                        state->soundBtn.setTextures(state->soundOnTex, nullptr, state->soundOnFilledTex);
+                    else
+                        state->soundBtn.setTextures(state->soundOffTex, nullptr, state->soundOffFilledTex);
                 }
-            }
-            else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && !overNew && !overUndo && !overRedo)
-            {
-                // Only handle board clicks if the click wasn't on a UI button
-                float adjustedX = event->button.x - state->boardXOffset;
-                float adjustedY = event->button.y - state->boardYOffset;
-                int col = static_cast<int>(adjustedX / state->tileSize);
-                int row = static_cast<int>(adjustedY / state->tileSize);
-
-                if (adjustedX >= 0 && adjustedY >= 0 && col < 8 && row < 8)
+                else if (clickedHome)
                 {
-                    state->controller.handleClick(state->b, row, col, state->history, state->historyIndex);
+                    SDL_OpenURL("https://glassoniongames.com");
+                }
+                else if (clickedPrivacy)
+                {
+                    SDL_OpenURL("https://glassoniongames.com/privacy-policy/");
+                }
+                else if (clickedUndo)
+                {
+                    if (state->historyIndex > 0)
+                    {
+                        MoveRecord m = state->history[state->historyIndex - 1];
+                        state->historyIndex--;
+                        replayHistory(state);
+                        char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
+                        state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol, true);
+                        state->controller.selectedRow = -1;
+                        state->controller.selectedCol = -1;
+                        state->controller.legalMoves.clear();
+                        state->winner = 0;
+                    }
+                }
+                else if (clickedRedo)
+                {
+                    if (state->historyIndex < (int)state->history.size())
+                    {
+                        MoveRecord m = state->history[state->historyIndex];
+                        char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
+                        state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol);
+                        state->b.tryMove8x8(m.fromRow, m.fromCol, m.toRow, m.toCol);
+                        state->historyIndex++;
+                        state->controller.selectedRow = -1;
+                        state->controller.selectedCol = -1;
+                        state->controller.legalMoves.clear();
+                        state->winner = 0;
+                    }
+                }
+                else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && !overNew && !overUndo && !overRedo && !overSound && !overHome && !overPrivacy)
+                {
+                    // Only handle board clicks if the click wasn't on a UI button
+                    float adjustedX = event->button.x - state->boardXOffset;
+                    float adjustedY = event->button.y - state->boardYOffset;
+                    int col = static_cast<int>(adjustedX / state->tileSize);
+                    int row = static_cast<int>(adjustedY / state->tileSize);
+
+                    if (adjustedX >= 0 && adjustedY >= 0 && col < 8 && row < 8)
+                    {
+                        state->controller.handleClick(state->b, row, col, state->history, state->historyIndex);
+                    }
                 }
             }
         }
+        return SDL_APP_CONTINUE;
     }
 
     return SDL_APP_CONTINUE;
@@ -694,21 +794,56 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     // Update child layouts inside the modal
     float mRectX = state->timeModal.rect.x;
     float mRectY = state->timeModal.rect.y;
-    state->modalTitle.updateLayout(mRectX + 20, mRectY + 20, 280, 40);
-    state->difficultyGroup.updateLayout(mRectX + 30, mRectY + 80, 25, 25);
-    state->modalStartBtn.updateLayout(mRectX + (320 / 2.0f) - (btnSize / 2.0f), mRectY + 425 - 100, btnSize, btnSize);
+
+    // PvP Toggle layout at the top of the modal
+    state->pvpLabelHuman.updateLayout(mRectX + 40, mRectY + 25, 80, 30);
+    state->pvpLabelAi.updateLayout(mRectX + 215, mRectY + 25, 30, 30);
+
+    if (!state->pvpToggle)
+    {
+        state->pvpToggle = new ToggleSwitch({mRectX + 135, mRectY + 30, 55, 20});
+        // Initialize state: Toggled ON (AI) if pvpMode is currently false
+        if (!state->controller.pvpMode)
+        {
+            state->pvpToggle->setToggled(true);
+        }
+    }
+    else
+    {
+        state->pvpToggle->updateLayout(mRectX + 135, mRectY + 30, 55, 20);
+    }
+
+    state->modalTitle.updateLayout(mRectX + 20, mRectY + 70, 280, 40);
+    state->difficultyGroup.updateLayout(mRectX + 30, mRectY + 130, 25, 25);
+    // Move OK button to bottom right
+    state->modalStartBtn.updateLayout(mRectX + 320 - btnSize - 20, mRectY + 400 - btnSize - 20, btnSize, btnSize);
+
+    // Disable AI settings and visually grey them out if Human mode is selected
+    bool aiSelected = state->pvpToggle ? state->pvpToggle->isSwitchToggled() : true;
+    state->modalTitle.alpha = aiSelected ? 1.0f : 0.45f; // Match radio button dimming factor
+    state->difficultyGroup.alpha = 1.0f;                 // Let the RadioButton internal logic handle dimming via the enabled flag
+    state->difficultyGroup.enabled = aiSelected;
 
     // Update Game Over Label Layouts
     float msgW = state->tileSize * 4.0f;
     float msgH = state->tileSize * 1.0f;
     float msgX = state->boardXOffset + (state->tileSize * 8.0f - msgW) / 2.0f;
     float msgY = state->newGameBtn.rect.y + state->newGameBtn.rect.h + (state->tileSize * 0.2f);
-    state->youWinLbl.updateLayout(msgX, msgY, msgW, msgH);
-    state->aiWinLbl.updateLayout(msgX, msgY, msgW, msgH);
+    state->redWinLbl.updateLayout(msgX, msgY, msgW, msgH);
+    state->blackWinLbl.updateLayout(msgX, msgY, msgW, msgH);
 
-    // New Game: Centered at the bottom
+    // Utility Button Group: New Game, Sound, Home, Privacy
+    float bottomBtnSize = state->tileSize * 1.0f;
+    float smallSpacing = state->tileSize * 0.3f;
+    float largeGap = state->tileSize * 0.9f;
+    float bottomGroupWidth = (4.0f * bottomBtnSize) + largeGap + (2.0f * smallSpacing);
+    float bottomStartX = (400.0f - bottomGroupWidth) / 2.0f;
     float btnYBottom = state->boardYOffset + (state->tileSize * 8.0f) + (state->tileSize * 0.5f);
-    state->newGameBtn.updateLayout(state->boardXOffset + (totalWidth - btnSize) / 2.0f, btnYBottom, btnSize, btnSize);
+
+    state->newGameBtn.updateLayout(bottomStartX, btnYBottom, bottomBtnSize, bottomBtnSize);
+    state->soundBtn.updateLayout(bottomStartX + bottomBtnSize + largeGap, btnYBottom, bottomBtnSize, bottomBtnSize);
+    state->homeBtn.updateLayout(bottomStartX + 2.0f * bottomBtnSize + largeGap + smallSpacing, btnYBottom, bottomBtnSize, bottomBtnSize);
+    state->privacyBtn.updateLayout(bottomStartX + 3.0f * bottomBtnSize + largeGap + 2.0f * smallSpacing, btnYBottom, bottomBtnSize, bottomBtnSize);
 
     // Undo & Redo: Centered at the top, above the thinking indicator
     float btnYTop = state->boardYOffset - btnSize - (state->tileSize * 1.2f);
@@ -728,6 +863,23 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     state->controller.updateAI(state->b, state->history, state->historyIndex);
     state->controller.updateAnimation();
 
+    // Check for sound triggers from the animation system
+    if (state->controller.soundTrigger > 0)
+    {
+        if (state->mixer && state->soundEnabled)
+        {
+            if (state->controller.soundTrigger == 2) // Capture
+            {
+                MIX_PlayAudio(state->mixer, state->captureSfx);
+            }
+            else // Standard Move
+            {
+                MIX_PlayAudio(state->mixer, state->moveSfx);
+            }
+        }
+        state->controller.soundTrigger = 0; // Reset after playing
+    }
+
     // Check for win condition if no animation is playing
     if (!state->controller.animation.active && state->winner == 0)
     {
@@ -735,11 +887,14 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         {
             // Current player has no moves
             if (state->b.getTurnPublic() == 'r')
-                state->winner = 2; // Red (Human) has no moves, AI wins
+                state->winner = 2; // Red has no moves, Black wins
             else
-                state->winner = 1; // Black (AI) has no moves, Human wins
+                state->winner = 1; // Black has no moves, Red wins
 
-            std::cout << "Game Over! Winner: " << (state->winner == 1 ? "You" : "AI") << std::endl;
+            std::cout << "Game Over! Winner: " << (state->winner == 1 ? "Red" : "Black") << std::endl;
+
+            if (state->mixer && state->winSfx && state->soundEnabled)
+                MIX_PlayAudio(state->mixer, state->winSfx);
         }
     }
 
@@ -754,9 +909,22 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     state->newGameBtn.render(state->renderer);
     state->undoBtn.render(state->renderer);
     state->redoBtn.render(state->renderer);
+    state->soundBtn.render(state->renderer);
+    state->homeBtn.render(state->renderer);
+    state->privacyBtn.render(state->renderer);
     drawGameOverMessage(state->renderer, state);
     state->workingIndicator.render(state->renderer);
     state->timeModal.render(state->renderer);
+
+    // Render PvP labels AFTER the modal so they aren't dimmed by the background
+    if (state->timeModal.visible)
+    {
+        state->modalTitle.render(state->renderer);
+        state->pvpLabelHuman.render(state->renderer);
+        state->pvpLabelAi.render(state->renderer);
+        if (state->pvpToggle)
+            state->pvpToggle->render(state->renderer);
+    }
 
     SDL_RenderPresent(state->renderer);
 
@@ -795,6 +963,38 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
             TTF_CloseFont(state->font);
         if (state->uiFont)
             TTF_CloseFont(state->uiFont);
+
+        if (state->moveSfx)
+            MIX_DestroyAudio(state->moveSfx);
+        if (state->captureSfx)
+            MIX_DestroyAudio(state->captureSfx);
+        if (state->winSfx)
+            MIX_DestroyAudio(state->winSfx);
+
+        if (state->soundOnTex)
+            SDL_DestroyTexture(state->soundOnTex);
+        if (state->soundOnFilledTex)
+            SDL_DestroyTexture(state->soundOnFilledTex);
+        if (state->soundOffTex)
+            SDL_DestroyTexture(state->soundOffTex);
+        if (state->soundOffFilledTex)
+            SDL_DestroyTexture(state->soundOffFilledTex);
+        if (state->homeTex)
+            SDL_DestroyTexture(state->homeTex);
+        if (state->homeFilledTex)
+            SDL_DestroyTexture(state->homeFilledTex);
+        if (state->privacyTex)
+            SDL_DestroyTexture(state->privacyTex);
+        if (state->privacyFilledTex)
+            SDL_DestroyTexture(state->privacyFilledTex);
+
+        if (state->pvpToggle)
+            delete state->pvpToggle;
+
+        if (state->mixer)
+            MIX_DestroyMixer(state->mixer);
+
+        MIX_Quit();
 
         TTF_Quit();
 

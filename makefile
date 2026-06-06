@@ -5,8 +5,8 @@ ICECREAM_DIR = ../IceCream
 # Path to the UIWidgets library (sibling directory)
 WIDGET_DIR = ../UIWidgets
 
-CXXFLAGS = -std=c++17 -Wall -I/opt/homebrew/src -I$(WIDGET_DIR)/src -I$(ICECREAM_DIR)/src
-LDFLAGS = -L/opt/homebrew/lib -lSDL3 -lSDL3_image -lSDL3_ttf
+CXXFLAGS = -std=c++17 -Wall -I/opt/homebrew/include -I$(WIDGET_DIR)/src -I$(ICECREAM_DIR)/src
+LDFLAGS = -L/opt/homebrew/lib -lSDL3 -lSDL3_image -lSDL3_ttf -lSDL3_mixer
 
 TARGET = bin/checkr
 
@@ -44,7 +44,8 @@ debug:
 		$(LDFLAGS)
 
 clean:
-	rm -f bin/*.o *.stackdump *~
+	rm -f bin/*.o bin/checkr
+	rm -f *.stackdump *~
 
 backup:
 	test -d backups || mkdir backups
