@@ -14,10 +14,10 @@
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
 #include <SDL3_mixer/SDL_mixer.h>
-#include "widgets.h"
 #include <iostream>
 #include <string>
 #include <vector>
+#include "widgets.h"
 #include "board.h"
 #include "gameController.h"
 
@@ -102,37 +102,39 @@ std::string getAssetPath(const std::string &relativePath, AppState *state)
         if (base)
         {
             std::string baseStr = base;
-            // SDL_Log("Internal: SDL_GetBasePath reported: %s", baseStr.c_str());
-            // In SDL3, the pointer returned by SDL_GetBasePath is internally managed.
-            // Do NOT call SDL_free on it, as it will cause a crash during SDL_Quit.
+            SDL_free((void *)base); // SDL3 requires freeing the result of SDL_GetBasePath
 
-            // Check if the asset exists at the executable's path.
-            // If not found, check the parent directory (common for bin/ or build/ folders).
-            std::string testPath = baseStr + relativePath;
-            SDL_IOStream *io = SDL_IOFromFile(testPath.c_str(), "rb");
-            if (!io)
+            // Try to find the root directory by checking the executable path and up to 2 parent directories.
+            // We look for "assets/board.png" as a marker file to confirm we found the correct project root.
+            std::string currentCheck = baseStr;
+            bool foundRoot = false;
+
+            for (int depth = 0; depth < 3; ++depth)
             {
-                // Remove trailing slash and find the previous directory separator
-                if (baseStr.length() > 1)
+                std::string markerPath = currentCheck + "assets/board.png";
+                SDL_IOStream *io = SDL_IOFromFile(markerPath.c_str(), "rb");
+                if (io)
                 {
-                    size_t last = baseStr.find_last_of("\\/", baseStr.length() - 2);
-                    if (last != std::string::npos)
-                    {
-                        std::string parentStr = baseStr.substr(0, last + 1);
-                        SDL_IOStream *ioParent = SDL_IOFromFile((parentStr + relativePath).c_str(), "rb");
-                        if (ioParent)
-                        {
-                            baseStr = parentStr;
-                            SDL_CloseIO(ioParent);
-                        }
-                    }
+                    state->basePath = currentCheck;
+                    SDL_CloseIO(io);
+                    foundRoot = true;
+                    break;
                 }
+
+                // Move up one directory and try again
+                if (currentCheck.length() <= 1)
+                    break;
+                size_t last = currentCheck.find_last_of("\\/", currentCheck.length() - 2);
+                if (last == std::string::npos)
+                    break;
+                currentCheck = currentCheck.substr(0, last + 1);
             }
-            else
+
+            // If no marker was found, default back to the absolute executable path
+            if (!foundRoot)
             {
-                SDL_CloseIO(io);
+                state->basePath = baseStr;
             }
-            state->basePath = baseStr;
         }
     }
     return state->basePath + relativePath;
@@ -186,6 +188,40 @@ SDL_Texture *createRectTexture(SDL_Renderer *renderer, int w, int h, Uint8 r, Ui
         SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
     SDL_DestroySurface(surface);
     return texture;
+}
+
+// Helper to create a simple fallback icon surface if the PNG is missing.
+SDL_Surface *createIconSurface(int size, Uint8 r, Uint8 g, Uint8 b)
+{
+    SDL_Surface *surface = SDL_CreateSurface(size, size, SDL_PIXELFORMAT_RGBA32);
+    if (!surface)
+        return nullptr;
+
+    float center = size / 2.0f;
+    float radius = (size / 2.0f) - 1.0f;
+
+    for (int y = 0; y < size; y++)
+    {
+        for (int x = 0; x < size; x++)
+        {
+            float dx = (float)x + 0.5f - center;
+            float dy = (float)y + 0.5f - center;
+            float dist = SDL_sqrtf(dx * dx + dy * dy);
+
+            Uint8 *pixel = (Uint8 *)surface->pixels + y * surface->pitch + x * 4;
+            pixel[0] = r;
+            pixel[1] = g;
+            pixel[2] = b;
+
+            if (dist <= radius - 0.5f)
+                pixel[3] = 255;
+            else if (dist <= radius + 0.5f)
+                pixel[3] = (Uint8)(255 * (radius + 0.5f - dist));
+            else
+                pixel[3] = 0;
+        }
+    }
+    return surface;
 }
 
 // Replays the move history from the beginning up to the current historyIndex.
@@ -473,6 +509,23 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
+    // Set the window icon
+    std::string iconPath = getAssetPath("assets/icon.png", state);
+    SDL_Surface *iconSurface = IMG_Load(iconPath.c_str());
+
+    if (!iconSurface)
+    {
+        // Fallback: Create a simple red checker piece icon if the asset is missing
+        SDL_Log("Warning: icon.png not found. Using procedural fallback icon.");
+        iconSurface = createIconSurface(64, 200, 40, 40);
+    }
+
+    if (iconSurface)
+    {
+        SDL_SetWindowIcon(state->window, iconSurface);
+        SDL_DestroySurface(iconSurface);
+    }
+
     // Initialize the font library
     if (!TTF_Init())
     {
@@ -593,6 +646,13 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         // Setup the Human/AI toggle labels
         state->pvpLabelHuman.load(state->renderer, state->uiFont, "Human", {255, 255, 255, 255});
         state->pvpLabelAi.load(state->renderer, state->uiFont, "AI", {255, 255, 255, 255});
+
+        // Initialize PvP Toggle
+        state->pvpToggle = new ToggleSwitch({0, 0, 55, 20});
+        if (!state->controller.pvpMode)
+        {
+            state->pvpToggle->setToggled(true);
+        }
 
         state->modalTitle.load(state->renderer, state->uiFont, "Select AI Difficulty", {255, 255, 255, 255});
 
@@ -799,19 +859,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     state->pvpLabelHuman.updateLayout(mRectX + 40, mRectY + 25, 80, 30);
     state->pvpLabelAi.updateLayout(mRectX + 215, mRectY + 25, 30, 30);
 
-    if (!state->pvpToggle)
-    {
-        state->pvpToggle = new ToggleSwitch({mRectX + 135, mRectY + 30, 55, 20});
-        // Initialize state: Toggled ON (AI) if pvpMode is currently false
-        if (!state->controller.pvpMode)
-        {
-            state->pvpToggle->setToggled(true);
-        }
-    }
-    else
-    {
-        state->pvpToggle->updateLayout(mRectX + 135, mRectY + 30, 55, 20);
-    }
+    state->pvpToggle->updateLayout(mRectX + 135, mRectY + 30, 55, 20);
+    state->pvpToggle->alpha = 1.0f; // Ensure toggle stays visible
 
     state->modalTitle.updateLayout(mRectX + 20, mRectY + 70, 280, 40);
     state->difficultyGroup.updateLayout(mRectX + 30, mRectY + 130, 25, 25);
