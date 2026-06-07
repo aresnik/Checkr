@@ -1,7 +1,7 @@
 /*
  * gameController.h
  *
- *      Author: alex@alexanderresnik.com
+ *      Author: alex@glassoniongames.com
  */
 
 #ifndef GAMECONTROLLER_H

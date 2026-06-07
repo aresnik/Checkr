@@ -1,7 +1,7 @@
 //=================================================================================
 // Name        : Checkr
 // Author      : Copyright 2026 Alexander Resnik
-// Email       : alex@alexanderresnik.com
+// Email       : alex@glassoniongames.com
 // Version     : 1.30
 // License     : MIT License
 // Description : A checkers game GUI frontend.
@@ -84,7 +84,7 @@ struct AppState
     // Game over labels and state
     Label redWinLbl;
     Label blackWinLbl;
-    int winner = 0; // 0: none, 1: Player (Red), 2: AI (Black)
+    int winner = 0; // 0: none, 1: Player Red, 2: Player Black
 
     std::vector<MoveRecord> history;
     int historyIndex = 0;
@@ -472,7 +472,7 @@ void drawGameOverMessage(SDL_Renderer *renderer, AppState *state)
 
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
-    SDL_SetAppMetadata("Checkr", "1.30", "com.alexresnik.checkr");
+    SDL_SetAppMetadata("Checkr", "1.30", "com.glassoniongames.checkr");
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO))
     {
