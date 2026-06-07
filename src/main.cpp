@@ -1,6 +1,6 @@
 //=================================================================================
 // Name        : Checkr
-// Author      : Copyright 2026 Alexander Resnik
+// Author      : Copyright 2026 Glass Onion Games LLC
 // Email       : alex@glassoniongames.com
 // Version     : 1.30
 // License     : MIT License
