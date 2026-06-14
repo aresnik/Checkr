@@ -16,6 +16,34 @@
             "problemMatcher": []
         },
         {
+            "label": "Build for Web (Wasm)",
+            "type": "shell",
+            "command": "make -f Makefile.wasm",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Serve Web (Wasm)",
+            "type": "shell",
+            "command": "python3 ../serve.py",
+            "options": {
+                "cwd": "${workspaceFolder}/web"
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
             "type": "cppbuild",
             "label": "C/C++: clang build active file",
             "command": "/usr/bin/clang",

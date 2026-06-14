@@ -3,5 +3,6 @@
     "git.enableSmartCommit": false,
     "git.postCommitCommand": "none",
     "git.rebaseWhenSync": false,
-    "git.confirmSync": true
+    "git.confirmSync": true,
+    "C_Cpp.errorSquiggles": "enabled"
 }

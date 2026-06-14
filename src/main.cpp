@@ -86,6 +86,9 @@ struct AppState
     Label blackWinLbl;
     int winner = 0; // 0: none, 1: Player Red, 2: Player Black
 
+    Label searchDepthLbl;
+    int lastDisplayedDepth = -1;
+
     std::vector<MoveRecord> history;
     int historyIndex = 0;
 
@@ -96,6 +99,12 @@ struct AppState
 // Helper to resolve absolute asset paths, critical for iOS sandboxing.
 std::string getAssetPath(const std::string &relativePath, AppState *state)
 {
+#if defined(SDL_PLATFORM_ANDROID)
+    // On Android, assets are often accessed via relative paths from the APK root.
+    // SDL3's SDL_IOFromFile handles this automatically if we don't prepend a base path.
+    return relativePath;
+#else
+    // For Desktop/iOS, we maintain the existing discovery logic.
     if (state->basePath.empty())
     {
         const char *base = SDL_GetBasePath();
@@ -138,6 +147,7 @@ std::string getAssetPath(const std::string &relativePath, AppState *state)
         }
     }
     return state->basePath + relativePath;
+#endif
 }
 
 // Helper to create the board background as a single texture.
@@ -470,7 +480,7 @@ void drawGameOverMessage(SDL_Renderer *renderer, AppState *state)
         state->blackWinLbl.render(renderer);
 }
 
-SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
+extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     SDL_SetAppMetadata("Checkr", "1.30", "com.glassoniongames.checkr");
 
@@ -715,7 +725,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
+extern "C" SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {
     AppState *state = static_cast<AppState *>(appstate);
 
@@ -743,84 +753,84 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
             return SDL_APP_CONTINUE;
         }
 
-        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN || event->type == SDL_EVENT_MOUSE_BUTTON_UP)
+        // 2. Handle Main Game Buttons
+        bool overNew = false, overUndo = false, overRedo = false, overSound = false, overHome = false, overPrivacy = false;
+
+        // Pass all pointer events (including motion for hover effects) to the buttons
+        bool clickedNew = state->newGameBtn.handleEvent(event, overNew);
+        bool clickedUndo = state->undoBtn.handleEvent(event, overUndo);
+        bool clickedRedo = state->redoBtn.handleEvent(event, overRedo);
+        bool clickedSound = state->soundBtn.handleEvent(event, overSound);
+        bool clickedHome = state->homeBtn.handleEvent(event, overHome);
+        bool clickedPrivacy = state->privacyBtn.handleEvent(event, overPrivacy);
+
+        if (clickedNew)
         {
-            if (event->button.button == SDL_BUTTON_LEFT)
+            state->timeModal.visible = true;
+        }
+        else if (clickedSound)
+        {
+            state->soundEnabled = !state->soundEnabled;
+            if (state->soundEnabled)
+                state->soundBtn.setTextures(state->soundOnTex, nullptr, state->soundOnFilledTex);
+            else
+                state->soundBtn.setTextures(state->soundOffTex, nullptr, state->soundOffFilledTex);
+        }
+        else if (clickedHome)
+        {
+#ifndef __EMSCRIPTEN__
+            SDL_OpenURL("https://glassoniongames.com");
+#endif
+        }
+        else if (clickedPrivacy)
+        {
+#ifndef __EMSCRIPTEN__
+            SDL_OpenURL("https://glassoniongames.com/privacy-policy/");
+#endif
+        }
+        else if (clickedUndo)
+        {
+            if (state->historyIndex > 0)
             {
-                // 2. Handle Main Game Buttons
-                bool overNew = false, overUndo = false, overRedo = false, overSound = false, overHome = false, overPrivacy = false;
+                MoveRecord m = state->history[state->historyIndex - 1];
+                state->historyIndex--;
+                replayHistory(state);
+                char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
+                state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol, true);
+                state->controller.selectedRow = -1;
+                state->controller.selectedCol = -1;
+                state->controller.legalMoves.clear();
+                state->winner = 0;
+            }
+        }
+        else if (clickedRedo)
+        {
+            if (state->historyIndex < (int)state->history.size())
+            {
+                MoveRecord m = state->history[state->historyIndex];
+                char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
+                state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol);
+                state->b.tryMove8x8(m.fromRow, m.fromCol, m.toRow, m.toCol);
+                state->historyIndex++;
+                state->controller.selectedRow = -1;
+                state->controller.selectedCol = -1;
+                state->controller.legalMoves.clear();
+                state->winner = 0;
+            }
+        }
+        else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN)
+        {
+            if (event->button.button == SDL_BUTTON_LEFT && !overNew && !overUndo && !overRedo && !overSound && !overHome && !overPrivacy)
+            {
+                // Only handle board clicks if the click wasn't on a UI button
+                float adjustedX = event->button.x - state->boardXOffset;
+                float adjustedY = event->button.y - state->boardYOffset;
+                int col = static_cast<int>(adjustedX / state->tileSize);
+                int row = static_cast<int>(adjustedY / state->tileSize);
 
-                // Callback approach for main buttons can be added later; keeping manual check for now
-
-                bool clickedNew = state->newGameBtn.handleEvent(event, overNew);
-                bool clickedUndo = state->undoBtn.handleEvent(event, overUndo);
-                bool clickedRedo = state->redoBtn.handleEvent(event, overRedo);
-                bool clickedSound = state->soundBtn.handleEvent(event, overSound);
-                bool clickedHome = state->homeBtn.handleEvent(event, overHome);
-                bool clickedPrivacy = state->privacyBtn.handleEvent(event, overPrivacy);
-
-                if (clickedNew)
+                if (adjustedX >= 0 && adjustedY >= 0 && col < 8 && row < 8)
                 {
-                    state->timeModal.visible = true;
-                }
-                else if (clickedSound)
-                {
-                    state->soundEnabled = !state->soundEnabled;
-                    if (state->soundEnabled)
-                        state->soundBtn.setTextures(state->soundOnTex, nullptr, state->soundOnFilledTex);
-                    else
-                        state->soundBtn.setTextures(state->soundOffTex, nullptr, state->soundOffFilledTex);
-                }
-                else if (clickedHome)
-                {
-                    SDL_OpenURL("https://glassoniongames.com");
-                }
-                else if (clickedPrivacy)
-                {
-                    SDL_OpenURL("https://glassoniongames.com/privacy-policy/");
-                }
-                else if (clickedUndo)
-                {
-                    if (state->historyIndex > 0)
-                    {
-                        MoveRecord m = state->history[state->historyIndex - 1];
-                        state->historyIndex--;
-                        replayHistory(state);
-                        char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
-                        state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol, true);
-                        state->controller.selectedRow = -1;
-                        state->controller.selectedCol = -1;
-                        state->controller.legalMoves.clear();
-                        state->winner = 0;
-                    }
-                }
-                else if (clickedRedo)
-                {
-                    if (state->historyIndex < (int)state->history.size())
-                    {
-                        MoveRecord m = state->history[state->historyIndex];
-                        char piece = state->b.getPieceAt8x8(m.fromRow, m.fromCol);
-                        state->controller.setupPathAnimation(state->b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol);
-                        state->b.tryMove8x8(m.fromRow, m.fromCol, m.toRow, m.toCol);
-                        state->historyIndex++;
-                        state->controller.selectedRow = -1;
-                        state->controller.selectedCol = -1;
-                        state->controller.legalMoves.clear();
-                        state->winner = 0;
-                    }
-                }
-                else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && !overNew && !overUndo && !overRedo && !overSound && !overHome && !overPrivacy)
-                {
-                    // Only handle board clicks if the click wasn't on a UI button
-                    float adjustedX = event->button.x - state->boardXOffset;
-                    float adjustedY = event->button.y - state->boardYOffset;
-                    int col = static_cast<int>(adjustedX / state->tileSize);
-                    int row = static_cast<int>(adjustedY / state->tileSize);
-
-                    if (adjustedX >= 0 && adjustedY >= 0 && col < 8 && row < 8)
-                    {
-                        state->controller.handleClick(state->b, row, col, state->history, state->historyIndex);
-                    }
+                    state->controller.handleClick(state->b, row, col, state->history, state->historyIndex);
                 }
             }
         }
@@ -830,7 +840,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppIterate(void *appstate)
+extern "C" SDL_AppResult SDL_AppIterate(void *appstate)
 {
     AppState *state = static_cast<AppState *>(appstate);
 
@@ -880,6 +890,15 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     float msgY = state->newGameBtn.rect.y + state->newGameBtn.rect.h + (state->tileSize * 0.2f);
     state->redWinLbl.updateLayout(msgX, msgY, msgW, msgH);
     state->blackWinLbl.updateLayout(msgX, msgY, msgW, msgH);
+
+    // Update Search Depth Label dynamically (only regenerates texture if value changes)
+    int currentDepth = state->controller.currentSearchDepth.load();
+    if (currentDepth != state->lastDisplayedDepth)
+    {
+        state->searchDepthLbl.load(state->renderer, state->uiFont, "Depth: " + std::to_string(currentDepth), {200, 200, 200, 255});
+        state->lastDisplayedDepth = currentDepth;
+    }
+    state->searchDepthLbl.updateLayout(state->boardXOffset + 10, state->boardYOffset - 35, 80, 25);
 
     // Utility Button Group: New Game, Sound, Home, Privacy
     float bottomBtnSize = state->tileSize * 1.0f;
@@ -962,6 +981,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     state->homeBtn.render(state->renderer);
     state->privacyBtn.render(state->renderer);
     drawGameOverMessage(state->renderer, state);
+    state->searchDepthLbl.render(state->renderer);
     state->workingIndicator.render(state->renderer);
     state->timeModal.render(state->renderer);
 
@@ -980,7 +1000,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     return SDL_APP_CONTINUE;
 }
 
-void SDL_AppQuit(void *appstate, SDL_AppResult result)
+extern "C" void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
     AppState *state = static_cast<AppState *>(appstate);
 

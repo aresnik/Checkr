@@ -1,11 +1,12 @@
 CXX = clang++
 
 # Path to the IceCream library (sibling directory)
+# Note: Avoid quotes and trailing spaces in variable definitions.
 ICECREAM_DIR = ../IceCream
 # Path to the UIWidgets library (sibling directory)
 WIDGET_DIR = ../UIWidgets
 
-CXXFLAGS = -std=c++17 -Wall -I/opt/homebrew/include -I$(WIDGET_DIR)/src -I$(ICECREAM_DIR)/src
+CXXFLAGS = -std=c++17 -Wall -O3 -I/opt/homebrew/include -I$(WIDGET_DIR)/src -I$(ICECREAM_DIR)/src
 LDFLAGS = -L/opt/homebrew/lib -lSDL3 -lSDL3_image -lSDL3_ttf -lSDL3_mixer
 
 TARGET = bin/checkr
@@ -14,11 +15,11 @@ TARGET = bin/checkr
 APP_OBJS = bin/main.o bin/gameController.o
 
 # All widget sources and objects
-WIDGET_SRCS = $(wildcard $(WIDGET_DIR)/src/*.cpp)
+WIDGET_SRCS = $(shell find $(WIDGET_DIR)/src -name "*.cpp") # Use shell find for paths with spaces
 WIDGET_OBJS = $(patsubst $(WIDGET_DIR)/src/%.cpp, bin/%.o, $(WIDGET_SRCS))
 
 # All IceCream sources and objects
-ICECREAM_SRCS = $(wildcard $(ICECREAM_DIR)/src/*.cpp)
+ICECREAM_SRCS = $(shell find $(ICECREAM_DIR)/src -name "*.cpp") # Use shell find for paths with spaces
 ICECREAM_OBJS = $(patsubst $(ICECREAM_DIR)/src/%.cpp, bin/%.o, $(ICECREAM_SRCS))
 
 $(TARGET): $(APP_OBJS) $(WIDGET_OBJS) $(ICECREAM_OBJS)

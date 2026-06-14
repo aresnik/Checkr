@@ -66,6 +66,9 @@ public:
     std::atomic<bool> aiThinking;
     std::atomic<bool> aiMoveReady;
 
+    // Current search depth reached by the AI (atomic for safe cross-thread UI updates)
+    std::atomic<int> currentSearchDepth;
+
     // Mutex protects shared AI move data between threads
     std::mutex aiMutex;
 

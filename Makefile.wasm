@@ -1,0 +1,57 @@
+CXX = em++
+
+# Project directories
+ICECREAM_DIR = ../IceCream
+WIDGET_DIR = ../UIWidgets
+
+# Paths to your manually built SDL3 extensions
+SDL_IMAGE_DIR = ../SDL_image
+SDL_TTF_DIR = ../SDL_ttf
+SDL_MIXER_DIR = ../SDL_mixer
+
+# Emscripten specific flags
+# -sUSE_SDL=3: Enables the SDL3 port
+# Note: Using Emscripten port for Freetype to support SDL3_ttf
+# -pthread: Your GameController uses std::thread for the AI, so we must enable pthreads
+# --preload-file assets: Packages your images/sounds so SDL can find them in the virtual root.
+# Note: SDL3 extension support in Emscripten is still evolving. Explicitly adding include paths for now.
+EMS_FLAGS = -sUSE_SDL=3 -sUSE_FREETYPE=1 \
+            -pthread -sPTHREAD_POOL_SIZE=2 \
+            -sALLOW_MEMORY_GROWTH=1 \
+            -sMAXIMUM_MEMORY=268435456 \
+            --preload-file assets \
+            --shell-file shell.html \
+            "-sEXPORTED_FUNCTIONS=['_main']" \
+            -sINITIAL_MEMORY=67108864
+
+# Explicitly define __EMSCRIPTEN__ and use quoted variables for include paths.
+# Emscripten's -sUSE_SDL=3 flags should handle the SDL3 system includes automatically.
+CXXFLAGS = -std=c++17 -Wall -O3 $(EMS_FLAGS) -D__EMSCRIPTEN__ \
+           -I$(WIDGET_DIR)/src -I$(ICECREAM_DIR)/src \
+           -I$(SDL_IMAGE_DIR)/include -I$(SDL_TTF_DIR)/include -I$(SDL_MIXER_DIR)/include
+
+TARGET = web/index.html
+
+# Object groups
+APP_SRCS = src/main.cpp src/gameController.cpp
+# GNU Make wildcard doesn't handle spaces well. We'll use a shell command to expand these.
+WIDGET_SRCS = $(shell find "$(WIDGET_DIR)/src" -name "*.cpp")
+ICECREAM_SRCS = $(shell find "$(ICECREAM_DIR)/src" -name "*.cpp")
+
+ALL_SRCS = $(APP_SRCS) $(WIDGET_SRCS) $(ICECREAM_SRCS)
+
+# Manually compiled static libraries
+STATIC_LIBS = $(SDL_IMAGE_DIR)/build/libSDL3_image.a \
+              $(SDL_TTF_DIR)/build/libSDL3_ttf.a \
+              $(SDL_MIXER_DIR)/build/libSDL3_mixer.a
+
+all: $(TARGET)
+
+$(TARGET): $(ALL_SRCS)
+	mkdir -p web
+	$(CXX) $(CXXFLAGS) $(ALL_SRCS) $(STATIC_LIBS) -o $(TARGET)
+	cp manifest.json web/
+	cp assets/icon.png web/icon.png
+
+clean:
+	rm -rf  web/*

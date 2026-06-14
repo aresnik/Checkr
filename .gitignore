@@ -9,6 +9,8 @@
 *.app
 bin/
 build/
+web/
+emsdk/
 
 # Debug symbols
 *.dSYM/
