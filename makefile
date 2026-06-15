@@ -6,13 +6,13 @@ ICECREAM_DIR = ../IceCream
 # Path to the UIWidgets library (sibling directory)
 WIDGET_DIR = ../UIWidgets
 
-CXXFLAGS = -std=c++17 -Wall -O3 -I/opt/homebrew/include -I$(WIDGET_DIR)/src -I$(ICECREAM_DIR)/src
+CXXFLAGS = -std=c++17 -g -Wall -O3 -I/opt/homebrew/include -I$(WIDGET_DIR)/src -I$(ICECREAM_DIR)/src
 LDFLAGS = -L/opt/homebrew/lib -lSDL3 -lSDL3_image -lSDL3_ttf -lSDL3_mixer
 
 TARGET = bin/checkr
 
 # Object groups
-APP_OBJS = bin/main.o bin/gameController.o
+APP_OBJS = bin/main.o bin/gameController.o bin/assetManager.o bin/gameScene.o bin/mainMenuScene.o
 
 # All widget sources and objects
 WIDGET_SRCS = $(shell find $(WIDGET_DIR)/src -name "*.cpp") # Use shell find for paths with spaces
@@ -33,7 +33,16 @@ bin/%.o: $(WIDGET_DIR)/src/%.cpp $(WIDGET_DIR)/src/widgets.h
 bin/%.o: $(ICECREAM_DIR)/src/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-bin/main.o: src/main.cpp $(ICECREAM_DIR)/src/board.h src/gameController.h
+bin/assetManager.o: src/assetManager.cpp src/assetManager.h
+	$(CXX) $(CXXFLAGS) -c src/assetManager.cpp -o bin/assetManager.o
+
+bin/gameScene.o: src/gameScene.cpp src/gameScene.h src/appState.h src/scene.h
+	$(CXX) $(CXXFLAGS) -c src/gameScene.cpp -o bin/gameScene.o
+
+bin/mainMenuScene.o: src/mainMenuScene.cpp src/mainMenuScene.h src/appState.h src/scene.h
+	$(CXX) $(CXXFLAGS) -c src/mainMenuScene.cpp -o bin/mainMenuScene.o
+
+bin/main.o: src/main.cpp $(ICECREAM_DIR)/src/board.h src/gameController.h src/assetManager.h src/appState.h src/gameScene.h src/mainMenuScene.h
 	$(CXX) $(CXXFLAGS) -c src/main.cpp -o bin/main.o
 
 bin/gameController.o: src/gameController.cpp src/gameController.h $(ICECREAM_DIR)/src/board.h
