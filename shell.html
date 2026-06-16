@@ -190,17 +190,29 @@
             var canvas = e.target;
             var rect = canvas.getBoundingClientRect();
 
-            // Convert the physical click to logical 400x800 game coordinates
-            var logicalX = (e.clientX - rect.left) * (400 / rect.width);
-            var logicalY = (e.clientY - rect.top) * (800 / rect.height);
+            var logicalX = e.clientX - rect.left;
+            var logicalY = e.clientY - rect.top;
 
-            // Home Button bounds (calculated from main.cpp layout)
-            if (logicalX >= 222.5 && logicalX <= 272.5 && logicalY >= 625 && logicalY <= 675) {
+            // Calculate dynamic UI sizes matching mainMenuScene.cpp
+            var w = rect.width;
+            var h = rect.height;
+            var minDim = Math.min(w, h);
+
+            var bottomBtnSize = minDim * 0.15;
+            var spacing = w * 0.05;
+            var totalBottomW = (bottomBtnSize * 3.0) + (spacing * 2.0);
+            var startX = (w - totalBottomW) / 2.0;
+            var y = h - bottomBtnSize - (h * 0.05);
+
+            // Home Button bounds
+            var homeX = startX + bottomBtnSize + spacing;
+            if (logicalX >= homeX && logicalX <= homeX + bottomBtnSize && logicalY >= y && logicalY <= y + bottomBtnSize) {
                 window.open('https://glassoniongames.com', '_blank');
             }
 
             // Privacy Button bounds
-            if (logicalX >= 287.5 && logicalX <= 337.5 && logicalY >= 625 && logicalY <= 675) {
+            var privX = startX + (bottomBtnSize * 2.0) + (spacing * 2.0);
+            if (logicalX >= privX && logicalX <= privX + bottomBtnSize && logicalY >= y && logicalY <= y + bottomBtnSize) {
                 window.open('https://glassoniongames.com/privacy-policy/', '_blank');
             }
         });

@@ -1,3 +1,9 @@
+/*
+ * appState.h
+ *
+ *      Author: alex@glassoniongames.com
+ */
+
 #ifndef APPSTATE_H
 #define APPSTATE_H
 

@@ -78,9 +78,11 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         SDL_Log("MIX_Init Error: %s", SDL_GetError());
     }
 
-    // Set a logical 400x800 coordinate system.
-    // SDL will now scale everything and fix mouse coordinates automatically.
-    SDL_SetRenderLogicalPresentation(state->renderer, 400, 800, SDL_LOGICAL_PRESENTATION_LETTERBOX);
+    // Fetch initial window dimensions
+    int w, h;
+    SDL_GetWindowSizeInPixels(state->window, &w, &h);
+    state->screenW = static_cast<float>(w);
+    state->screenH = static_cast<float>(h);
 
     // Load all visual and audio assets into the manager
     state->assets.loadAssets(state->window, state->renderer, state->mixer);
@@ -124,6 +126,12 @@ extern "C" SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 extern "C" SDL_AppResult SDL_AppIterate(void *appstate)
 {
     AppState *state = static_cast<AppState *>(appstate);
+
+    // Keep screen dimensions continuously updated for responsive UI layout
+    int w, h;
+    SDL_GetWindowSizeInPixels(state->window, &w, &h);
+    state->screenW = static_cast<float>(w);
+    state->screenH = static_cast<float>(h);
 
     // Handle scene transitions safely between frames
     if (state->nextScene != SceneID::None)

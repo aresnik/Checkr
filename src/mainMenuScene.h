@@ -1,8 +1,15 @@
+/*
+ * mainMenuScene.h
+ *
+ *      Author: alex@glassoniongames.com
+ */
+
 #ifndef MAINMENUSCENE_H
 #define MAINMENUSCENE_H
 
 #include "scene.h"
 #include "widgets.h"
+#include "boxContainer.h"
 
 // Forward declaration
 struct AppState;
@@ -24,6 +31,14 @@ private:
     TextureButton soundBtn;
     TextureButton homeBtn;
     TextureButton privacyBtn;
+
+    StackContainer rootStack;
+    VBoxContainer mainVBox;
+    HBoxContainer playBtnBox;
+    HBoxContainer bottomMenuBox;
+    HBoxContainer bottomHBox;
+    HBoxContainer titleHBox;
+    Spacer spacers[12];
 };
 
 #endif

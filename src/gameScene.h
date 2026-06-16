@@ -1,3 +1,9 @@
+/*
+ * gameScene.h
+ *
+ *      Author: alex@glassoniongames.com
+ */
+
 #ifndef GAMESCENE_H
 #define GAMESCENE_H
 
@@ -5,6 +11,9 @@
 #include "board.h"
 #include "gameController.h"
 #include "widgets.h"
+#include "boxContainer.h"
+#include "boardWidget.h"
+#include "gameSetupDialog.h"
 #include <vector>
 
 // Forward declaration to avoid circular dependencies
@@ -22,30 +31,38 @@ public:
     void render(AppState *state) override;
 
 private:
-    float tileSize = 0;
-    float boardXOffset = 0;
-    float boardYOffset = 0;
-
     board b;
     GameController controller;
     std::vector<MoveRecord> history;
     int historyIndex = 0;
     int winner = 0;
 
+    BoardWidget boardWidget{b, controller, history, historyIndex};
+
     TextureButton newGameBtn;
     TextureButton undoBtn;
     TextureButton redoBtn;
     TextureButton homeBtn;
 
-    ToggleSwitch *pvpToggle = nullptr;
-    Label pvpLabelHuman;
-    Label pvpLabelAi;
+    StackContainer rootStack;
+    VBoxContainer mainVBox;
 
-    DialogBox timeModal;
-    Label modalTitle;
-    RadioButtonGroup difficultyGroup;
-    RadioButton modalOptions[6];
-    TextureButton modalStartBtn;
+    StackContainer msgStack;
+    HBoxContainer msgHBox;
+
+    HBoxContainer indicatorHBox;
+
+    VBoxContainer boardGroupVBox;
+    AspectRatioContainer boardAspect;
+
+    HBoxContainer modalPadHBox;
+    VBoxContainer modalPadVBox;
+
+    HBoxContainer topBtnBox;
+    HBoxContainer bottomBtnBox;
+
+    AspectRatioContainer modalAspect;
+    GameSetupDialog setupDialog;
 
     WorkingIndicator workingIndicator;
     Label redWinLbl;
@@ -53,17 +70,10 @@ private:
     Label searchDepthLbl;
     int lastDisplayedDepth = -1;
 
+    Spacer spacers[26];
+
     void updateLayout(AppState *state);
     void replayHistory(AppState *state);
-
-    void drawCheckerboard(SDL_Renderer *renderer, AppState *state);
-    void drawPieceAtPixel(SDL_Renderer *renderer, float centerX, float centerY, char piece, AppState *state);
-    void drawPiece(SDL_Renderer *renderer, int row, int col, char piece, AppState *state);
-    void drawPieces(SDL_Renderer *renderer, AppState *state);
-    void drawSelectedSquare(SDL_Renderer *renderer, AppState *state);
-    void drawLegalMoves(SDL_Renderer *renderer, AppState *state);
-    void drawMoveAnimation(SDL_Renderer *renderer, AppState *state);
-    void drawGameOverMessage(SDL_Renderer *renderer, AppState *state);
 };
 
 #endif

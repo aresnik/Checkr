@@ -1,3 +1,9 @@
+/*
+ * scene.h
+ *
+ *      Author: alex@glassoniongames.com
+ */
+
 #ifndef SCENE_H
 #define SCENE_H
 

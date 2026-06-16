@@ -1,3 +1,9 @@
+/*
+ * assetManager.h
+ *
+ *      Author: alex@glassoniongames.com
+ */
+
 #ifndef ASSETMANAGER_H
 #define ASSETMANAGER_H
 

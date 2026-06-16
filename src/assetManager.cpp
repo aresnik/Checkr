@@ -1,3 +1,9 @@
+/*
+ * assetManager.cpp
+ *
+ *      Author: alex@glassoniongames.com
+ */
+
 #include "assetManager.h"
 
 std::string AssetManager::getAssetPath(const std::string &relativePath)
@@ -139,8 +145,8 @@ bool AssetManager::loadAssets(SDL_Window *window, SDL_Renderer *renderer, MIX_Mi
 
     // Load Fonts
     std::string fontPath = getAssetPath("assets/DayPosterBlackNF.ttf");
-    font = TTF_OpenFont(fontPath.c_str(), 64);
-    uiFont = TTF_OpenFont(fontPath.c_str(), 22);
+    font = TTF_OpenFont(fontPath.c_str(), 80);   // Increased for larger, crisper win messages
+    uiFont = TTF_OpenFont(fontPath.c_str(), 32); // Increased significantly for readable standard UI text
 
     if (!font || !uiFont)
     {
