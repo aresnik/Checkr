@@ -131,17 +131,24 @@ bool AssetManager::loadAssets(SDL_Window *window, SDL_Renderer *renderer, MIX_Mi
     undoFilledTex = loadUITex("assets/undo_filled.png", 150, 150, 150);
     redoTex = loadUITex("assets/redo.png", 100, 100, 100);
     redoFilledTex = loadUITex("assets/redo_filled.png", 150, 150, 150);
-    okTex = loadUITex("assets/OK.png", 100, 100, 100);
-    okFilledTex = loadUITex("assets/OK_filled.png", 150, 150, 150);
 
+    onePlayerTex = loadUITex("assets/one_player.png", 100, 100, 100);
+    onePlayerFilledTex = loadUITex("assets/one_player_filled.png", 150, 150, 150);
+    twoPlayerTex = loadUITex("assets/two_players.png", 100, 100, 100);
+    twoPlayerFilledTex = loadUITex("assets/two_players_filled.png", 150, 150, 150);
+    resumeTex = loadUITex("assets/resume_game.png", 100, 100, 100);
+    resumeFilledTex = loadUITex("assets/resume_game_filled.png", 150, 150, 150);
     soundOnTex = loadUITex("assets/sound_on.png", 100, 100, 100);
     soundOnFilledTex = loadUITex("assets/sound_on_filled.png", 150, 150, 150);
     soundOffTex = loadUITex("assets/sound_off.png", 100, 100, 100);
     soundOffFilledTex = loadUITex("assets/sound_off_filled.png", 150, 150, 150);
-    homeTex = loadUITex("assets/home.png", 100, 100, 100);
-    homeFilledTex = loadUITex("assets/home_filled.png", 150, 150, 150);
+    homePageTex = loadUITex("assets/home_page.png", 100, 100, 100);
+    homePageFilledTex = loadUITex("assets/home_page_filled.png", 150, 150, 150);
     privacyTex = loadUITex("assets/privacy.png", 100, 100, 100);
     privacyFilledTex = loadUITex("assets/privacy_filled.png", 150, 150, 150);
+
+    homeTex = loadUITex("assets/home.png", 100, 100, 100);
+    homeFilledTex = loadUITex("assets/home_filled.png", 150, 150, 150);
 
     // Load Fonts
     std::string fontPath = getAssetPath("assets/DayPosterBlackNF.ttf");
@@ -186,10 +193,6 @@ void AssetManager::freeAssets()
         SDL_DestroyTexture(redoTex);
     if (redoFilledTex)
         SDL_DestroyTexture(redoFilledTex);
-    if (okTex)
-        SDL_DestroyTexture(okTex);
-    if (okFilledTex)
-        SDL_DestroyTexture(okFilledTex);
 
     if (soundOnTex)
         SDL_DestroyTexture(soundOnTex);
@@ -199,10 +202,10 @@ void AssetManager::freeAssets()
         SDL_DestroyTexture(soundOffTex);
     if (soundOffFilledTex)
         SDL_DestroyTexture(soundOffFilledTex);
-    if (homeTex)
-        SDL_DestroyTexture(homeTex);
-    if (homeFilledTex)
-        SDL_DestroyTexture(homeFilledTex);
+    if (homePageTex)
+        SDL_DestroyTexture(homePageTex);
+    if (homePageFilledTex)
+        SDL_DestroyTexture(homePageFilledTex);
     if (privacyTex)
         SDL_DestroyTexture(privacyTex);
     if (privacyFilledTex)

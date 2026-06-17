@@ -20,8 +20,9 @@ GameScene::GameScene(AppState *state)
 
     homeBtn.setTextures(state->assets.homeTex, state->assets.homeTex, state->assets.homeFilledTex);
 
-    newGameBtn.setOnClickCallback([this]()
-                                  { modalPadVBox.visible = true; });
+    newGameBtn.setOnClickCallback([state]()
+                                  { state->nextScene = SceneID::NewGame; });
+
     homeBtn.setOnClickCallback([state]()
                                { state->nextScene = SceneID::MainMenu; });
     undoBtn.setOnClickCallback([this, state]()
@@ -72,19 +73,6 @@ GameScene::GameScene(AppState *state)
 
     if (state->assets.font && state->assets.uiFont)
     {
-        setupDialog.load(state, controller.pvpMode);
-        setupDialog.setOnStartCallback([this, state](bool pvpMode, int timeLimit)
-                                       {
-            controller.pvpMode = pvpMode;
-            controller.aiTimeLimit = timeLimit;
-            SDL_Color white = {255, 255, 255, 255};
-            blackWinLbl.load(state->renderer, state->assets.font, "BLACK WINS!", white);
-            b.startup();
-            modalPadVBox.visible = false;
-            winner = 0;
-            history.clear();
-            historyIndex = 0; });
-
         SDL_Color white = {255, 255, 255, 255};
         SDL_Color red = {200, 40, 40, 255};
         redWinLbl.load(state->renderer, state->assets.font, "RED WINS!", red);
@@ -115,21 +103,7 @@ GameScene::GameScene(AppState *state)
     msgStack.addChild(&redWinLbl);
     msgStack.addChild(&blackWinLbl);
 
-    modalAspect.setRatio(1.0f / 1.4f);
-    modalAspect.addChild(&setupDialog);
-
-    modalPadHBox.addChild(&spacers[15], 0.5f);
-    modalPadHBox.addChild(&modalAspect, 5.0f);
-    modalPadHBox.addChild(&spacers[16], 0.5f);
-
-    modalPadVBox.addChild(&spacers[17], 0.7f);
-    modalPadVBox.addChild(&modalPadHBox, 4.0f);
-    modalPadVBox.addChild(&spacers[18], 0.9f);
-
     rootStack.addChild(&mainVBox);
-    rootStack.addChild(&modalPadVBox);
-
-    modalPadVBox.visible = true;
 }
 
 GameScene::~GameScene()
@@ -138,7 +112,22 @@ GameScene::~GameScene()
     controller.stopAI();
 }
 
-void GameScene::enter(AppState *state) {}
+void GameScene::enter(AppState *state)
+{
+    controller.pvpMode = state->pvpMode;
+
+    int times[] = {3, 5, 15, 30, 60};
+    controller.aiTimeLimit = times[state->aiDifficulty];
+
+    if (state->startNewGame)
+    {
+        b.startup();
+        winner = 0;
+        history.clear();
+        historyIndex = 0;
+        state->startNewGame = false;
+    }
+}
 
 void GameScene::updateLayout(AppState *state)
 {
@@ -152,7 +141,7 @@ void GameScene::updateLayout(AppState *state)
     bool engineIdle = !controller.aiThinking && !controller.animation.active;
     undoBtn.enabled = engineIdle && (historyIndex > 0);
     redoBtn.enabled = engineIdle && (historyIndex < (int)history.size());
-    newGameBtn.enabled = engineIdle;
+    newGameBtn.enabled = engineIdle && (winner != 0 || historyIndex == 0);
 
     redWinLbl.visible = (winner == 1);
     blackWinLbl.visible = (winner == 2);
@@ -174,14 +163,7 @@ void GameScene::replayHistory(AppState *state)
 void GameScene::handleEvent(AppState *state, SDL_Event *event)
 {
     bool dummy = false;
-    if (modalPadVBox.visible)
-    {
-        modalPadVBox.handleEvent(event, dummy);
-    }
-    else
-    {
-        rootStack.handleEvent(event, dummy);
-    }
+    rootStack.handleEvent(event, dummy);
 }
 
 void GameScene::update(AppState *state)

@@ -36,17 +36,25 @@ public:
     SDL_Texture *undoFilledTex = nullptr;
     SDL_Texture *redoTex = nullptr;
     SDL_Texture *redoFilledTex = nullptr;
-    SDL_Texture *okTex = nullptr;
-    SDL_Texture *okFilledTex = nullptr;
 
+    SDL_Texture *onePlayerTex = nullptr;
+    SDL_Texture *onePlayerFilledTex = nullptr;
+    SDL_Texture *twoPlayerTex = nullptr;
+    SDL_Texture *twoPlayerFilledTex = nullptr;
+    SDL_Texture *resumeTex = nullptr;
+    SDL_Texture *resumeFilledTex = nullptr;
     SDL_Texture *soundOnTex = nullptr;
     SDL_Texture *soundOnFilledTex = nullptr;
     SDL_Texture *soundOffTex = nullptr;
     SDL_Texture *soundOffFilledTex = nullptr;
-    SDL_Texture *homeTex = nullptr;
-    SDL_Texture *homeFilledTex = nullptr;
+
+    SDL_Texture *homePageTex = nullptr;
+    SDL_Texture *homePageFilledTex = nullptr;
     SDL_Texture *privacyTex = nullptr;
     SDL_Texture *privacyFilledTex = nullptr;
+
+    SDL_Texture *homeTex = nullptr;
+    SDL_Texture *homeFilledTex = nullptr;
 
     // Audio
     MIX_Audio *moveSfx = nullptr;

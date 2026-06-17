@@ -27,18 +27,20 @@ public:
 
 private:
     Label titleLbl;
-    TextureButton playBtn;
+    TextureButton onePlayerBtn;
+    TextureButton twoPlayerBtn;
+    TextureButton resumeBtn;
     TextureButton soundBtn;
     TextureButton homeBtn;
+    TextureButton homePageBtn;
     TextureButton privacyBtn;
 
     StackContainer rootStack;
     VBoxContainer mainVBox;
-    HBoxContainer playBtnBox;
-    HBoxContainer bottomMenuBox;
-    HBoxContainer bottomHBox;
     HBoxContainer titleHBox;
-    Spacer spacers[12];
+    HBoxContainer btnWrapperHBox;
+    VBoxContainer btnVBox;
+    Spacer spacers[15];
 };
 
 #endif

@@ -18,7 +18,8 @@ enum class SceneID
 {
     None,
     MainMenu,
-    Game
+    Game,
+    NewGame
 };
 
 struct AppState
@@ -38,8 +39,16 @@ struct AppState
     // The actively running scene (Menu, Game, etc.)
     std::unique_ptr<Scene> currentScene;
 
+    // Stashed game scene for resuming
+    std::unique_ptr<Scene> savedGameScene;
+
     // Flag for scene transitions
     SceneID nextScene = SceneID::None;
+    SceneID currentSceneId = SceneID::None;
+
+    int aiDifficulty = 0;
+    bool pvpMode = false;
+    bool startNewGame = true;
 };
 
 #endif

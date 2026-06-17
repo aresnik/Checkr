@@ -13,7 +13,6 @@
 #include "widgets.h"
 #include "boxContainer.h"
 #include "boardWidget.h"
-#include "gameSetupDialog.h"
 #include <vector>
 
 // Forward declaration to avoid circular dependencies
@@ -55,14 +54,8 @@ private:
     VBoxContainer boardGroupVBox;
     AspectRatioContainer boardAspect;
 
-    HBoxContainer modalPadHBox;
-    VBoxContainer modalPadVBox;
-
     HBoxContainer topBtnBox;
     HBoxContainer bottomBtnBox;
-
-    AspectRatioContainer modalAspect;
-    GameSetupDialog setupDialog;
 
     WorkingIndicator workingIndicator;
     Label redWinLbl;

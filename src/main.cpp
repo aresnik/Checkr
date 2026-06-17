@@ -21,6 +21,7 @@
 #include "appState.h"
 #include "gameScene.h"
 #include "mainMenuScene.h"
+#include "newGameScene.h"
 
 extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
@@ -90,6 +91,7 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     // Let the Scene handle creating the board, AI controller, and UI
     state->currentScene = std::make_unique<MainMenuScene>(state);
     state->currentScene->enter(state);
+    state->currentSceneId = SceneID::MainMenu;
 
     *appstate = state;
 
@@ -136,10 +138,35 @@ extern "C" SDL_AppResult SDL_AppIterate(void *appstate)
     // Handle scene transitions safely between frames
     if (state->nextScene != SceneID::None)
     {
+        // Stash the game scene securely in memory if we are navigating away from it
+        if (state->currentSceneId == SceneID::Game && state->nextScene != SceneID::Game)
+        {
+            state->savedGameScene = std::move(state->currentScene);
+        }
+
         if (state->nextScene == SceneID::MainMenu)
+        {
             state->currentScene = std::make_unique<MainMenuScene>(state);
+            state->currentSceneId = SceneID::MainMenu;
+        }
         else if (state->nextScene == SceneID::Game)
-            state->currentScene = std::make_unique<GameScene>(state);
+        {
+            if (state->startNewGame || !state->savedGameScene)
+            {
+                state->savedGameScene.reset(); // Destroy any old stashed game to free memory
+                state->currentScene = std::make_unique<GameScene>(state);
+            }
+            else
+            {
+                state->currentScene = std::move(state->savedGameScene);
+            }
+            state->currentSceneId = SceneID::Game;
+        }
+        else if (state->nextScene == SceneID::NewGame)
+        {
+            state->currentScene = std::make_unique<NewGameScene>(state);
+            state->currentSceneId = SceneID::NewGame;
+        }
 
         if (state->currentScene)
             state->currentScene->enter(state);
