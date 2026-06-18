@@ -28,6 +28,8 @@ private:
     VBoxContainer mainVBox;
     HBoxContainer btnHBox;
     HBoxContainer homeBtnHBox;
+    HBoxContainer titleHBox;
+    HBoxContainer sliderHBox;
 
     Label titleLbl;
     Slider difficultySlider;
@@ -35,7 +37,7 @@ private:
     TextureButton homeBtn;
 
     // Reusable empty spacers for flex layouts
-    Spacer spacers[10];
+    Spacer spacers[14];
 };
 
 #endif

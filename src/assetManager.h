@@ -21,6 +21,7 @@ public:
     // Core Assets
     TTF_Font *font = nullptr;
     TTF_Font *uiFont = nullptr;
+    TTF_Font *uiFontSmall = nullptr;
 
     SDL_Texture *boardTexture = nullptr;
     SDL_Texture *redTexture = nullptr;

@@ -9,7 +9,15 @@
 std::string AssetManager::getAssetPath(const std::string &relativePath)
 {
 #if defined(SDL_PLATFORM_ANDROID)
-    return relativePath;
+    // On Android, the 'assets' folder in the project becomes the root of the APK.
+    // If the path starts with "assets/", we strip it to match the APK structure.
+    std::string path = relativePath;
+    std::string prefix = "assets/";
+    if (path.compare(0, prefix.length(), prefix) == 0)
+    {
+        return path.substr(prefix.length());
+    }
+    return path;
 #else
     if (basePath.empty())
     {
@@ -125,25 +133,34 @@ bool AssetManager::loadAssets(SDL_Window *window, SDL_Renderer *renderer, MIX_Mi
         return t;
     };
 
+    // Load button textures
     newGameTex = loadUITex("assets/new_game.png", 100, 100, 100);
     newGameFilledTex = loadUITex("assets/new_game_filled.png", 150, 150, 150);
+
     undoTex = loadUITex("assets/undo.png", 100, 100, 100);
     undoFilledTex = loadUITex("assets/undo_filled.png", 150, 150, 150);
+
     redoTex = loadUITex("assets/redo.png", 100, 100, 100);
     redoFilledTex = loadUITex("assets/redo_filled.png", 150, 150, 150);
 
     onePlayerTex = loadUITex("assets/one_player.png", 100, 100, 100);
     onePlayerFilledTex = loadUITex("assets/one_player_filled.png", 150, 150, 150);
+
     twoPlayerTex = loadUITex("assets/two_players.png", 100, 100, 100);
     twoPlayerFilledTex = loadUITex("assets/two_players_filled.png", 150, 150, 150);
+
     resumeTex = loadUITex("assets/resume_game.png", 100, 100, 100);
     resumeFilledTex = loadUITex("assets/resume_game_filled.png", 150, 150, 150);
+
     soundOnTex = loadUITex("assets/sound_on.png", 100, 100, 100);
     soundOnFilledTex = loadUITex("assets/sound_on_filled.png", 150, 150, 150);
+
     soundOffTex = loadUITex("assets/sound_off.png", 100, 100, 100);
     soundOffFilledTex = loadUITex("assets/sound_off_filled.png", 150, 150, 150);
+
     homePageTex = loadUITex("assets/home_page.png", 100, 100, 100);
     homePageFilledTex = loadUITex("assets/home_page_filled.png", 150, 150, 150);
+
     privacyTex = loadUITex("assets/privacy.png", 100, 100, 100);
     privacyFilledTex = loadUITex("assets/privacy_filled.png", 150, 150, 150);
 
@@ -152,10 +169,11 @@ bool AssetManager::loadAssets(SDL_Window *window, SDL_Renderer *renderer, MIX_Mi
 
     // Load Fonts
     std::string fontPath = getAssetPath("assets/DayPosterBlackNF.ttf");
-    font = TTF_OpenFont(fontPath.c_str(), 80);   // Increased for larger, crisper win messages
-    uiFont = TTF_OpenFont(fontPath.c_str(), 32); // Increased significantly for readable standard UI text
+    font = TTF_OpenFont(fontPath.c_str(), 80);        // Increased for larger, crisper win messages
+    uiFont = TTF_OpenFont(fontPath.c_str(), 32);      // Increased significantly for readable standard UI text
+    uiFontSmall = TTF_OpenFont(fontPath.c_str(), 28); // Smaller size for slider text
 
-    if (!font || !uiFont)
+    if (!font || !uiFont || !uiFontSmall)
     {
         SDL_Log("Warning: Could not load font from %s. Error: %s", fontPath.c_str(), SDL_GetError());
         success = false;
@@ -181,40 +199,68 @@ void AssetManager::freeAssets()
     if (legalMoveTexture)
         SDL_DestroyTexture(legalMoveTexture);
 
+    // Destroy button textures
     if (newGameTex)
         SDL_DestroyTexture(newGameTex);
     if (newGameFilledTex)
         SDL_DestroyTexture(newGameFilledTex);
+
     if (undoTex)
         SDL_DestroyTexture(undoTex);
     if (undoFilledTex)
         SDL_DestroyTexture(undoFilledTex);
+
     if (redoTex)
         SDL_DestroyTexture(redoTex);
     if (redoFilledTex)
         SDL_DestroyTexture(redoFilledTex);
 
+    if (onePlayerTex)
+        SDL_DestroyTexture(onePlayerTex);
+    if (onePlayerFilledTex)
+        SDL_DestroyTexture(onePlayerFilledTex);
+
+    if (twoPlayerTex)
+        SDL_DestroyTexture(twoPlayerTex);
+    if (twoPlayerFilledTex)
+        SDL_DestroyTexture(twoPlayerFilledTex);
+
+    if (resumeTex)
+        SDL_DestroyTexture(resumeTex);
+    if (resumeFilledTex)
+        SDL_DestroyTexture(resumeFilledTex);
+
     if (soundOnTex)
         SDL_DestroyTexture(soundOnTex);
     if (soundOnFilledTex)
         SDL_DestroyTexture(soundOnFilledTex);
+
     if (soundOffTex)
         SDL_DestroyTexture(soundOffTex);
     if (soundOffFilledTex)
         SDL_DestroyTexture(soundOffFilledTex);
+
     if (homePageTex)
         SDL_DestroyTexture(homePageTex);
     if (homePageFilledTex)
         SDL_DestroyTexture(homePageFilledTex);
+
     if (privacyTex)
         SDL_DestroyTexture(privacyTex);
     if (privacyFilledTex)
         SDL_DestroyTexture(privacyFilledTex);
 
+    if (homeTex)
+        SDL_DestroyTexture(homeTex);
+    if (homeFilledTex)
+        SDL_DestroyTexture(homeFilledTex);
+
     if (font)
         TTF_CloseFont(font);
     if (uiFont)
         TTF_CloseFont(uiFont);
+    if (uiFontSmall)
+        TTF_CloseFont(uiFontSmall);
 
     if (moveSfx)
         MIX_DestroyAudio(moveSfx);

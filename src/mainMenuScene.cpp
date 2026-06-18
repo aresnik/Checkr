@@ -10,7 +10,7 @@
 
 MainMenuScene::MainMenuScene(AppState *state)
 {
-    titleLbl.load(state->renderer, state->assets.font, "CHECKR", {255, 255, 255, 255});
+    titleLbl.load(state->renderer, state->assets.font, "Checkr", {255, 255, 255, 255});
     titleLbl.setAlignment(Label::ALIGN_CENTER);
     onePlayerBtn.setTextures(state->assets.onePlayerTex, state->assets.onePlayerTex, state->assets.onePlayerFilledTex);
     twoPlayerBtn.setTextures(state->assets.twoPlayerTex, state->assets.twoPlayerTex, state->assets.twoPlayerFilledTex);
@@ -91,10 +91,10 @@ MainMenuScene::MainMenuScene(AppState *state)
     btnWrapperHBox.addChild(&btnVBox, 2.0f);
     btnWrapperHBox.addChild(&spacers[8], 1.0f);
 
-    mainVBox.addChild(&spacers[6], 1.5f);
-    mainVBox.addChild(&titleHBox, 1.5f);
-    mainVBox.addChild(&spacers[10], 0.5f);
-    mainVBox.addChild(&btnWrapperHBox, 6.0f);
+    mainVBox.addChild(&spacers[6], 0.8f);
+    mainVBox.addChild(&titleHBox, 1.0f);
+    mainVBox.addChild(&spacers[10], 0.3f);
+    mainVBox.addChild(&btnWrapperHBox, 5.0f);
     mainVBox.addChild(&spacers[11], 1.0f);
 
     rootStack.addChild(&mainVBox);

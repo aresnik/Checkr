@@ -14,21 +14,21 @@ NewGameScene::NewGameScene(AppState *state)
         if (state->pvpMode)
             titleLbl.load(state->renderer, state->assets.font, "Human to Human Player", {255, 255, 255, 255});
         else
-            titleLbl.load(state->renderer, state->assets.font, "SELECT DIFFICULTY", {255, 255, 255, 255});
+            titleLbl.load(state->renderer, state->assets.font, "Select AI Difficulty", {255, 255, 255, 255});
 
         titleLbl.setAlignment(Label::ALIGN_CENTER);
     }
 
     difficultySlider.setNumPositions(5);
     difficultySlider.setValue(state->aiDifficulty); // Default to current state
-    if (state->assets.uiFont)
+    if (state->assets.uiFontSmall)
     {
         SDL_Color white = {255, 255, 255, 255};
-        difficultySlider.setLabel(0, state->renderer, state->assets.uiFont, "3sec", white);
-        difficultySlider.setLabel(1, state->renderer, state->assets.uiFont, "5sec", white);
-        difficultySlider.setLabel(2, state->renderer, state->assets.uiFont, "15sec", white);
-        difficultySlider.setLabel(3, state->renderer, state->assets.uiFont, "30sec", white);
-        difficultySlider.setLabel(4, state->renderer, state->assets.uiFont, "1min", white);
+        difficultySlider.setLabel(0, state->renderer, state->assets.uiFontSmall, "3sec", white);
+        difficultySlider.setLabel(1, state->renderer, state->assets.uiFontSmall, "5sec", white);
+        difficultySlider.setLabel(2, state->renderer, state->assets.uiFontSmall, "15sec", white);
+        difficultySlider.setLabel(3, state->renderer, state->assets.uiFontSmall, "30sec", white);
+        difficultySlider.setLabel(4, state->renderer, state->assets.uiFontSmall, "1min", white);
     }
 
     startBtn.setTextures(state->assets.newGameTex, state->assets.newGameTex, state->assets.newGameFilledTex);
@@ -51,14 +51,22 @@ NewGameScene::NewGameScene(AppState *state)
     homeBtnHBox.addChild(&homeBtn, 1.0f);
     homeBtnHBox.addChild(&spacers[7], 2.5f);
 
+    titleHBox.addChild(&spacers[9], 0.15f);
+    titleHBox.addChild(&titleLbl, 1.0f);
+    titleHBox.addChild(&spacers[10], 0.15f);
+
+    sliderHBox.addChild(&spacers[11], 0.15f);
+    sliderHBox.addChild(&difficultySlider, 1.0f);
+    sliderHBox.addChild(&spacers[12], 0.15f);
+
     // Build the basic UI tree with flex containers
     mainVBox.addChild(&spacers[0], 1.0f);
-    mainVBox.addChild(&titleLbl, 1.5f);
+    mainVBox.addChild(&titleHBox, 1.5f);
     mainVBox.addChild(&spacers[3], 2.0f);
 
     if (!state->pvpMode)
     {
-        mainVBox.addChild(&difficultySlider, 1.5f);
+        mainVBox.addChild(&sliderHBox, 1.5f);
         mainVBox.addChild(&spacers[4], 2.0f);
     }
     else
@@ -66,7 +74,7 @@ NewGameScene::NewGameScene(AppState *state)
         mainVBox.addChild(&spacers[4], 3.5f); // Keep consistent spacing if slider is removed
     }
 
-    mainVBox.addChild(&btnHBox, 1.5f);
+    mainVBox.addChild(&btnHBox, 1.2f);
     mainVBox.addChild(&spacers[8], 0.2f);
     mainVBox.addChild(&homeBtnHBox, 1.2f);
     mainVBox.addChild(&spacers[5], 0.8f);
@@ -91,7 +99,7 @@ void NewGameScene::update(AppState *state)
 
 void NewGameScene::render(AppState *state)
 {
-    SDL_SetRenderDrawColor(state->renderer, 20, 20, 20, 255);
+    SDL_SetRenderDrawColor(state->renderer, 0, 0, 0, 255);
     SDL_RenderClear(state->renderer);
 
     rootStack.render(state->renderer);
