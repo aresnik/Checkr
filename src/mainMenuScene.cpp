@@ -102,6 +102,8 @@ MainMenuScene::MainMenuScene(AppState *state)
 
 void MainMenuScene::enter(AppState *state)
 {
+    // Re-enable the screensaver when on the main menu
+    SDL_EnableScreenSaver();
 }
 
 void MainMenuScene::handleEvent(AppState *state, SDL_Event *event)

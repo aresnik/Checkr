@@ -31,7 +31,6 @@ private:
     TextureButton twoPlayerBtn;
     TextureButton resumeBtn;
     TextureButton soundBtn;
-    TextureButton homeBtn;
     TextureButton homePageBtn;
     TextureButton privacyBtn;
 

@@ -114,6 +114,9 @@ GameScene::~GameScene()
 
 void GameScene::enter(AppState *state)
 {
+    // Prevent the screen from sleeping during gameplay
+    SDL_DisableScreenSaver();
+
     controller.pvpMode = state->pvpMode;
 
     int times[] = {3, 5, 15, 30, 60};

@@ -4,7 +4,7 @@
         {
             "label": "Build and Run Checkr",
             "type": "shell",
-            "command": "make && ./bin/checkr",
+            "command": "make CXXFLAGS=\"-DPROJECT_ROOT='${workspaceFolder}'\" && ./bin/checkr",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -50,6 +50,8 @@
             "args": [
                 "-fcolor-diagnostics",
                 "-fansi-escape-codes",
+                "-DPROJECT_ROOT=\"${workspaceFolder}\"",
+                "-I/opt/homebrew/include/SDL3",
                 "-g",
                 "${file}",
                 "-o",

@@ -19,6 +19,13 @@ std::string AssetManager::getAssetPath(const std::string &relativePath)
     }
     return path;
 #else
+#ifdef PROJECT_ROOT
+    if (basePath.empty())
+    {
+        basePath = PROJECT_ROOT;
+        basePath += "/";
+    }
+#endif
     if (basePath.empty())
     {
         const char *base = SDL_GetBasePath();
@@ -49,6 +56,7 @@ std::string AssetManager::getAssetPath(const std::string &relativePath)
             if (!foundRoot)
             {
                 basePath = baseStr;
+                SDL_Log("Asset marker not found. Falling back to base path: %s", basePath.c_str());
             }
         }
     }
@@ -169,9 +177,9 @@ bool AssetManager::loadAssets(SDL_Window *window, SDL_Renderer *renderer, MIX_Mi
 
     // Load Fonts
     std::string fontPath = getAssetPath("assets/DayPosterBlackNF.ttf");
-    font = TTF_OpenFont(fontPath.c_str(), 80);        // Increased for larger, crisper win messages
-    uiFont = TTF_OpenFont(fontPath.c_str(), 32);      // Increased significantly for readable standard UI text
-    uiFontSmall = TTF_OpenFont(fontPath.c_str(), 28); // Smaller size for slider text
+    font = TTF_OpenFont(fontPath.c_str(), 160);        // Increased for high-resolution oversampling
+    uiFont = TTF_OpenFont(fontPath.c_str(), 128);      // High resolution for crisp UI rendering
+    uiFontSmall = TTF_OpenFont(fontPath.c_str(), 96);  // High resolution for small text/sliders
 
     if (!font || !uiFont || !uiFontSmall)
     {
@@ -186,6 +194,7 @@ void AssetManager::freeAssets()
 {
     if (boardTexture)
         SDL_DestroyTexture(boardTexture);
+        
     if (redTexture)
         SDL_DestroyTexture(redTexture);
     if (blackTexture)

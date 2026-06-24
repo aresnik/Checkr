@@ -11,8 +11,7 @@
 // Constructor initializes AI state flags and invalid default AI move positions.
 GameController::GameController()
 
-
-: aiThinking(false), aiMoveReady(false), currentSearchDepth(0), aiTimeLimit(3), pvpMode(false)
+    : aiThinking(false), aiMoveReady(false), currentSearchDepth(0), aiTimeLimit(3), pvpMode(false)
 {
     aiFrom = {-1, -1};
     aiTo = {-1, -1};
@@ -222,7 +221,7 @@ bool GameController::handleClick(board &b, int row, int col, std::vector<MoveRec
                     int fr, fc, tr, tc;
 
                     // Search for the AI's best move at specified depth
-                    bool found = boardCopy.findBestMove8x8(limit, fr, fc, tr, tc, &currentSearchDepth);
+                    bool found = boardCopy.findBestMove8x8(limit, fr, fc, tr, tc, &currentSearchDepth, &aiThinking);
 
                     if (found && aiThinking)
                     {

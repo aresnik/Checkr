@@ -66,6 +66,9 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     if (!TTF_Init())
     {
         SDL_Log("TTF_Init Error: %s", SDL_GetError());
+        SDL_DestroyRenderer(state->renderer);
+        SDL_DestroyWindow(state->window);
+        delete state;
         return SDL_APP_FAILURE;
     }
 
