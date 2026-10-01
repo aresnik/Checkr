@@ -31,35 +31,42 @@ GameScene::GameScene(AppState *state)
                                { state->nextScene = SceneID::MainMenu; });
     undoBtn.setOnClickCallback([this, state]()
                                {
-        if (historyIndex > 0)
+        for (int i = 0; i < 2; ++i) // Undo two moves for AI vs Human games
         {
-            controller.stopAI();
-            controller.aiMoveReady = false;
-            MoveRecord m = history[historyIndex - 1];
-            historyIndex--;
-            replayHistory(state);
-            char piece = b.getPieceAt8x8(m.fromRow, m.fromCol);
-            controller.setupPathAnimation(b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol, true);
-            controller.selectedRow = -1;
-            controller.selectedCol = -1;
-            controller.legalMoves.clear();
-            winner = 0;
+            if (historyIndex > 0)
+            {
+                controller.stopAI();
+                controller.aiMoveReady = false;
+                MoveRecord m = history[historyIndex - 1];
+                historyIndex--;
+                replayHistory(state);
+                char piece = b.getPieceAt8x8(m.fromRow, m.fromCol);
+                controller.setupPathAnimation(b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol, true);
+                controller.selectedRow = -1;
+                controller.selectedCol = -1;
+                controller.legalMoves.clear();
+                winner = 0;
+            }
         } });
+
     redoBtn.setOnClickCallback([this]()
                                {
-        if (historyIndex < (int)history.size())
+        for (int i = 0; i < 2; ++i) // Redo two moves for AI vs Human games
         {
-            controller.stopAI();
-            controller.aiMoveReady = false;
-            MoveRecord m = history[historyIndex];
-            char piece = b.getPieceAt8x8(m.fromRow, m.fromCol);
-            controller.setupPathAnimation(b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol);
-            b.tryMove8x8(m.fromRow, m.fromCol, m.toRow, m.toCol);
-            historyIndex++;
-            controller.selectedRow = -1;
-            controller.selectedCol = -1;
-            controller.legalMoves.clear();
-            winner = 0;
+            if (historyIndex < (int)history.size())
+            {
+                controller.stopAI();
+                controller.aiMoveReady = false;
+                MoveRecord m = history[historyIndex];
+                char piece = b.getPieceAt8x8(m.fromRow, m.fromCol);
+                controller.setupPathAnimation(b, piece, m.fromRow, m.fromCol, m.toRow, m.toCol);
+                b.tryMove8x8(m.fromRow, m.fromCol, m.toRow, m.toCol);
+                historyIndex++;
+                controller.selectedRow = -1;
+                controller.selectedCol = -1;
+                controller.legalMoves.clear();
+                winner = 0;
+            }
         } });
 
     topBtnBox.addChild(&spacers[0], 2.5f);
@@ -156,8 +163,8 @@ void GameScene::updateLayout(AppState *state)
     }
 
     bool engineIdle = !controller.aiThinking && !controller.isAnimating();
-    undoBtn.enabled = engineIdle && (historyIndex > 0);
-    redoBtn.enabled = engineIdle && (historyIndex < (int)history.size());
+    undoBtn.enabled = engineIdle && (historyIndex > 0) && !controller.pvpMode;
+    redoBtn.enabled = engineIdle && (historyIndex < (int)history.size()) && !controller.pvpMode;
     newGameBtn.enabled = engineIdle && (winner != 0 || historyIndex == 0);
 
     redWinLbl.visible = (winner == 1);

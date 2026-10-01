@@ -1,5 +1,5 @@
 // 1. Increment this version name EVERY time you update the game files (e.g., checkr-v3, checkr-v4)
-const CACHE_NAME = 'checkr-v3';
+const CACHE_NAME = 'checkr-v6';
 
 const ASSETS = [
     './',
