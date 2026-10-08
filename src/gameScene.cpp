@@ -163,8 +163,8 @@ void GameScene::updateLayout(AppState *state)
     }
 
     bool engineIdle = !controller.aiThinking && !controller.isAnimating();
-    undoBtn.enabled = engineIdle && (historyIndex > 0) && !controller.pvpMode;
-    redoBtn.enabled = engineIdle && (historyIndex < (int)history.size()) && !controller.pvpMode;
+    undoBtn.enabled = engineIdle && (historyIndex > 0) && !state->pvpMode;
+    redoBtn.enabled = engineIdle && (historyIndex < (int)history.size()) && !state->pvpMode;
     newGameBtn.enabled = engineIdle && (winner != 0 || historyIndex == 0);
 
     redWinLbl.visible = (winner == 1);
